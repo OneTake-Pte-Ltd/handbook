@@ -178,6 +178,10 @@ function buildShell() {
     destroy() {
       listeners.abort();
     },
+    setSection(section) {
+      body.dataset.section = section;
+      topbar.dataset.section = section;
+    },
     setActiveNav(id) {
       for (const link of root.querySelectorAll("[data-nav]")) {
         if (link.dataset.nav === id) link.setAttribute("aria-current", "page");
@@ -197,6 +201,10 @@ function buildShell() {
   };
 }
 
+function messagePage(title, text) {
+  return h("div", { class: "page page--narrow" }, h("h1", { class: "page-title" }, title), h("div", { class: "card" }, h("p", { style: "margin-top:0" }, text), h("a", { class: "button", href: "#/" }, "Back to the home page")));
+}
+
 let renderCount = 0;
 
 async function route() {
@@ -207,12 +215,12 @@ async function route() {
   const main = shell.main;
   const ticket = ++renderCount;
 
+  shell.setSection(match && match.nav === "knowledge" ? "knowledge" : "other");
   if (!match || (match.allowed && !match.allowed())) {
     shell.setActiveNav(null);
-    setTitle("Not found");
-    clear(main,
-      h("div", { class: "page" }, h("h1", { class: "page-title" }, "Page not found"), h("p", {}, "This page doesn't exist or you don't have access to it. "), h("a", { href: "#/" }, "Back to the home page")),
-    );
+    const refused = Boolean(match);
+    setTitle(refused ? "No access" : "Not found");
+    clear(main, messagePage(refused ? "You don't have access to this page" : "Page not found", refused ? "This page is for admins and team leaders. If you think you should see it, ask an admin." : "This page doesn't exist."));
     return;
   }
   shell.setActiveNav(match.nav || null);
@@ -225,8 +233,14 @@ async function route() {
     await view.render(main, { path, query: new URLSearchParams(location.hash.split("?")[1] || ""), ...(match.params || {}), refreshBranding: () => shell.refreshBranding() });
   } catch (error) {
     if (ticket !== renderCount) return;
-    console.error(error);
-    clear(main, h("div", { class: "page" }, h("div", { class: "alert alert--error", role: "alert" }, error.message || "Something went wrong.")));
+    if (error.status === 404) {
+      clear(main, messagePage("Not found", error.message));
+    } else if (error.status === 403) {
+      clear(main, messagePage("You don't have access to this page", error.message));
+    } else {
+      console.error(error);
+      clear(main, h("div", { class: "page" }, h("div", { class: "alert alert--error", role: "alert" }, error.message || "Something went wrong.")));
+    }
   }
   if (renderCount > 1) main.focus({ preventScroll: true });
 }
