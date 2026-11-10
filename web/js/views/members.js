@@ -109,7 +109,7 @@ export async function renderMembersList(container) {
           h("td", { "data-label": "Role" }, u.role_title || ""),
           h("td", { "data-label": "Departments" }, departmentTags(u.departments)),
           h("td", { class: "progress-cell", "data-label": "Completion" }, completionText(u.completion)),
-          h("td", { "data-label": "Last login" }, u.last_login_at ? relativeTime(u.last_login_at) : "Never"),
+          h("td", { class: "nowrap", "data-label": "Last login" }, u.last_login_at ? relativeTime(u.last_login_at) : "Never"),
           h("td", { "data-label": "Status" }, h("div", { class: "tags" }, statusBadges(u), u.is_active && !u.is_admin ? "Active" : null)),
         ),
       ),

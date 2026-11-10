@@ -7,9 +7,9 @@
 
 import { nowIso } from "./db.js";
 import { HttpError, badRequest, forbidden, json, noContent, notFound, optionalString, readJson, requireString } from "./http.js";
-import { accessFor, atLeast, canEditDocument, canView, loadAccessData, mandatoryByUser } from "./permissions.js";
+import { accessFor, atLeast, canEditDocument, canView } from "./permissions.js";
 import { notificationStatement, peopleAccess, requireAdmin } from "./people.js";
-import { indexDocumentStatements, unindexDocumentsStatement } from "./search.js";
+import { unindexDocumentsStatement } from "./search.js";
 import { progressFor, progressStatus } from "./progress.js";
 
 // Plain text (milestone 3 editor) to the Tiptap JSON stored in content_json.
@@ -31,29 +31,12 @@ export function textToDoc(text) {
   };
 }
 
-async function getDocumentRow(db, id) {
-  const document = await db.first("SELECT * FROM documents WHERE id = ?", Number(id));
-  if (!document) throw notFound("This document doesn't exist.");
-  return document;
-}
-
 // Loads a document the current user may see; otherwise 404 (not 403), so
 // people can't learn which document IDs exist.
 async function visibleDocument(ctx, id) {
   const document = await ctx.db.first("SELECT * FROM documents WHERE id = ?", Number(id));
   const access = await accessFor(ctx);
   if (!document || !canView(access, document)) throw notFound("This document doesn't exist or you don't have access to it.");
-  return document;
-}
-
-async function editableDocument(ctx, id) {
-  const document = await visibleDocument(ctx, id);
-  const access = await accessFor(ctx);
-  if (!canEditDocument(access, document)) {
-    throw forbidden(document.is_published && atLeast(access.level(document.id), "edit_review")
-      ? "Published documents can only be changed with Edit and publish for now. Review arrives with the editor."
-      : "You can't edit this document.");
-  }
   return document;
 }
 
@@ -75,12 +58,14 @@ function touch(ctx, documentId) {
 export async function handleTree(ctx) {
   const access = await accessFor(ctx);
   const editMode = ctx.url.searchParams.get("mode") === "edit";
-  const [spaces, categories, documents, progress] = await Promise.all([
+  const [spaces, categories, documents, progress, drafts] = await Promise.all([
     ctx.db.all("SELECT * FROM spaces ORDER BY position, id"),
     ctx.db.all("SELECT * FROM categories ORDER BY position, id"),
     ctx.db.all("SELECT id, category_id, title, description, position, is_published, published_at, last_major_revision_at, updated_at FROM documents ORDER BY position, id"),
     progressFor(ctx.db, ctx.user.id),
+    editMode ? ctx.db.all("SELECT document_id, status FROM drafts") : [],
   ]);
+  const draftStatus = new Map(drafts.map((d) => [d.document_id, d.status]));
   const docsByCategory = new Map();
   for (const d of documents) {
     const visible = editMode ? canView(access, d) : d.is_published && atLeast(access.level(d.id), "view");
@@ -92,6 +77,7 @@ export async function handleTree(ctx) {
       is_published: Boolean(d.is_published),
       level: access.level(d.id),
       can_edit: canEditDocument(access, d),
+      draft_status: editMode && canEditDocument(access, d) ? draftStatus.get(d.id) || null : null,
       mandatory: access.mandatory(d.id),
       progress: progressStatus(progress.get(d.id)),
     });
@@ -140,7 +126,14 @@ export async function handleGetDocument(ctx) {
   });
   const done = stepList.filter((s) => s.completed).length;
   const level = access.level(document.id);
+  const draft = atLeast(level, "edit_review")
+    ? await ctx.db.first(
+        "SELECT d.status, d.updated_at, u.first_name, u.last_name FROM drafts d LEFT JOIN users u ON u.id = d.author_id WHERE d.document_id = ?",
+        document.id,
+      )
+    : null;
   return json({
+    draft: draft ? { status: draft.status, updated_at: draft.updated_at, author: draft.first_name ? `${draft.first_name} ${draft.last_name}` : null } : null,
     document: {
       id: document.id,
       title: document.title,
@@ -158,6 +151,7 @@ export async function handleGetDocument(ctx) {
       level,
       can_edit: canEditDocument(access, document),
       can_publish: atLeast(level, "edit_publish"),
+      can_review: atLeast(level, "edit_publish") || access.isAdmin,
       can_delete: atLeast(level, "edit_publish"),
       can_manage_access: access.isAdmin || (await peopleAccess(ctx)).leads.size > 0,
     },
@@ -195,35 +189,33 @@ export async function handleCreateDocument(ctx) {
     ctx.user.id,
   );
   const id = result.lastInsertRowid;
-  await ctx.db.run(
+  const step = await ctx.db.run(
     "INSERT INTO steps (document_id, title, position, content_json, content_text, updated_at) VALUES (?, ?, 1, ?, '', ?)",
     id,
     fields.title,
     JSON.stringify(textToDoc("")),
     now,
   );
+  // New documents start with a draft, which readers never see.
+  const snapshot = { title: fields.title, description: fields.description, steps: [{ id: step.lastInsertRowid, key: `s${step.lastInsertRowid}`, title: fields.title, content_json: textToDoc("") }] };
+  await ctx.db.run(
+    "INSERT INTO drafts (document_id, snapshot_json, status, author_id, created_at, updated_at) VALUES (?, ?, 'editing', ?, ?, ?)",
+    id,
+    JSON.stringify(snapshot),
+    ctx.user.id,
+    now,
+    now,
+  );
   return json({ document: { id, ...fields, is_published: false } }, 201);
 }
 
-// PATCH /api/documents/:id { title, description }
-export async function handleUpdateDocument(ctx) {
-  const document = await editableDocument(ctx, ctx.params.id);
-  const fields = documentFields(await readJson(ctx.request), { partial: true });
-  const keys = Object.keys(fields);
-  if (!keys.length) throw badRequest("Nothing to change.");
-  const statements = [[`UPDATE documents SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, [...keys.map((k) => fields[k]), document.id]], touch(ctx, document.id)];
-  if (document.is_published) statements.push(...(await indexStatementsAfter(ctx, document.id, fields)));
-  await ctx.db.batch(statements);
+// POST /api/documents/:id/unpublish (Edit and publish): readers stop seeing it.
+export async function handleUnpublishDocument(ctx) {
+  const document = await visibleDocument(ctx, ctx.params.id);
+  const access = await accessFor(ctx);
+  if (!atLeast(access.level(document.id), "edit_publish")) throw forbidden("Unpublishing needs Edit and publish.");
+  await ctx.db.batch([["UPDATE documents SET is_published = 0 WHERE id = ?", [document.id]], unindexDocumentsStatement([document.id])]);
   return json({ ok: true });
-}
-
-// The search index must follow published documents. Builds the statements
-// that re-index a document, given changes not yet written.
-async function indexStatementsAfter(ctx, documentId, documentChanges = {}, stepChanges = null) {
-  const document = { ...(await getDocumentRow(ctx.db, documentId)), ...documentChanges };
-  let steps = await ctx.db.all("SELECT id, title, content_text FROM steps WHERE document_id = ? ORDER BY position, id", documentId);
-  if (stepChanges) steps = stepChanges(steps);
-  return indexDocumentStatements(document, steps);
 }
 
 // DELETE /api/documents/:id
@@ -248,113 +240,6 @@ export async function handleMoveDocument(ctx) {
   const position = await nextPosition(ctx.db, "documents", "category_id", target.id);
   await ctx.db.batch([["UPDATE documents SET category_id = ?, position = ? WHERE id = ?", [target.id, position, document.id]], touch(ctx, document.id)]);
   return json({ ok: true });
-}
-
-// Users who must be told about a mandatory document (active, mandatory by grant).
-async function mandatoryAudience(ctx, documentId, { onlyNewSince } = {}) {
-  const users = await ctx.db.all("SELECT id, is_active, is_admin FROM users WHERE is_active = 1");
-  const data = await loadAccessData(ctx.db);
-  // Treat the document as published for this computation.
-  data.documents = data.documents.map((d) => (d.id === documentId ? { ...d, is_published: 1 } : d));
-  const mandatory = mandatoryByUser(data, users);
-  return users.filter((u) => mandatory.get(u.id).has(documentId) && (!onlyNewSince || !onlyNewSince.has(u.id))).map((u) => u.id);
-}
-
-// POST /api/documents/:id/publish { publish: true|false, revision: "minor"|"major" }
-// Temporary milestone 3 endpoint; drafts and review replace it in milestone 5.
-export async function handlePublishDocument(ctx) {
-  const document = await visibleDocument(ctx, ctx.params.id);
-  const access = await accessFor(ctx);
-  if (!atLeast(access.level(document.id), "edit_publish")) throw forbidden("Publishing needs Edit and publish.");
-  const body = await readJson(ctx.request);
-  const now = nowIso();
-
-  if (body.publish === false) {
-    await ctx.db.batch([["UPDATE documents SET is_published = 0 WHERE id = ?", [document.id]], unindexDocumentsStatement([document.id])]);
-    return json({ ok: true, is_published: false });
-  }
-
-  const firstPublication = !document.is_published && !document.published_at;
-  const major = body.revision === "major" && Boolean(document.published_at);
-  const statements = [
-    [
-      `UPDATE documents SET is_published = 1, published_at = COALESCE(published_at, ?), updated_at = ?, updated_by = ?
-         ${major ? ", last_major_revision_at = ?" : ""} WHERE id = ?`,
-      major ? [now, now, ctx.user.id, now, document.id] : [now, now, ctx.user.id, document.id],
-    ],
-    ...(await indexStatementsAfter(ctx, document.id, { is_published: 1 })),
-  ];
-  if (firstPublication || major) {
-    const audience = await mandatoryAudience(ctx, document.id);
-    for (const userId of audience) {
-      statements.push(notificationStatement(userId, major ? "major_revision" : "mandatory_assigned", { document_id: document.id, title: document.title }));
-    }
-  }
-  await ctx.db.batch(statements);
-  return json({ ok: true, is_published: true, revision: major ? "major" : "minor" });
-}
-
-// POST /api/documents/:id/steps { title, after_step_id }
-export async function handleCreateStep(ctx) {
-  const document = await editableDocument(ctx, ctx.params.id);
-  const body = await readJson(ctx.request);
-  const title = requireString(body, "title", "Step title", { max: 200 });
-  const steps = await ctx.db.all("SELECT id FROM steps WHERE document_id = ? ORDER BY position, id", document.id);
-  const afterIndex = body.after_step_id ? steps.findIndex((s) => s.id === Number(body.after_step_id)) : steps.length - 1;
-  const now = nowIso();
-  const result = await ctx.db.run(
-    "INSERT INTO steps (document_id, title, position, content_json, content_text, updated_at) VALUES (?, ?, 0, ?, '', ?)",
-    document.id,
-    title,
-    JSON.stringify(textToDoc("")),
-    now,
-  );
-  const ids = steps.map((s) => s.id);
-  ids.splice(afterIndex + 1, 0, result.lastInsertRowid);
-  const statements = ids.map((id, i) => ["UPDATE steps SET position = ? WHERE id = ?", [i + 1, id]]);
-  statements.push(touch(ctx, document.id));
-  if (document.is_published) statements.push(...(await indexStatementsAfter(ctx, document.id)));
-  await ctx.db.batch(statements);
-  return json({ step: { id: result.lastInsertRowid, title } }, 201);
-}
-
-// PATCH /api/steps/:id { title, content_text }
-export async function handleUpdateStep(ctx) {
-  const step = await stepWithDocument(ctx, ctx.params.id);
-  const document = await editableDocument(ctx, step.document_id);
-  const body = await readJson(ctx.request, 2_000_000);
-  const changes = {};
-  if ("title" in body) changes.title = requireString(body, "title", "Step title", { max: 200 });
-  if ("content_text" in body) {
-    if (typeof body.content_text !== "string") throw badRequest("The content must be text.");
-    if (body.content_text.length > 500_000) throw badRequest("This step is too long.");
-    changes.content_text = body.content_text.replace(/\r\n?/g, "\n");
-    changes.content_json = JSON.stringify(textToDoc(changes.content_text));
-  }
-  const keys = Object.keys(changes);
-  if (!keys.length) throw badRequest("Nothing to change.");
-  const now = nowIso();
-  const statements = [
-    [`UPDATE steps SET ${keys.map((k) => `${k} = ?`).join(", ")}, updated_at = ? WHERE id = ?`, [...keys.map((k) => changes[k]), now, step.id]],
-    touch(ctx, document.id),
-  ];
-  if (document.is_published) {
-    statements.push(...(await indexStatementsAfter(ctx, document.id, {}, (steps) => steps.map((s) => (s.id === step.id ? { ...s, ...changes } : s)))));
-  }
-  await ctx.db.batch(statements);
-  return json({ ok: true, updated_at: now });
-}
-
-// DELETE /api/steps/:id
-export async function handleDeleteStep(ctx) {
-  const step = await stepWithDocument(ctx, ctx.params.id);
-  const document = await editableDocument(ctx, step.document_id);
-  const count = Number(await ctx.db.value("SELECT COUNT(*) FROM steps WHERE document_id = ?", document.id));
-  if (count <= 1) throw badRequest("A document needs at least one step.");
-  const statements = [["DELETE FROM steps WHERE id = ?", [step.id]], touch(ctx, document.id)];
-  if (document.is_published) statements.push(...(await indexStatementsAfter(ctx, document.id, {}, (steps) => steps.filter((s) => s.id !== step.id))));
-  await ctx.db.batch(statements);
-  return noContent();
 }
 
 async function readableStep(ctx, stepId) {
@@ -480,13 +365,13 @@ export async function handleDeleteCategory(ctx) {
   return noContent();
 }
 
-// POST /api/reorder { type: "space"|"category"|"document"|"step", ids: [...] }
+// POST /api/reorder { type: "space"|"category"|"document", ids: [...] } (steps are reordered in the draft)
 // The ids are the new order of all the items of one parent.
 export async function handleReorder(ctx) {
   const body = await readJson(ctx.request);
   const ids = Array.isArray(body.ids) ? body.ids.map(Number) : [];
   if (!ids.length || ids.some((id) => !Number.isInteger(id)) || new Set(ids).size !== ids.length) throw badRequest("Please send the new order as a list of IDs.");
-  const tables = { space: ["spaces", null], category: ["categories", "space_id"], document: ["documents", "category_id"], step: ["steps", "document_id"] };
+  const tables = { space: ["spaces", null], category: ["categories", "space_id"], document: ["documents", "category_id"] };
   if (!tables[body.type]) throw badRequest("Unknown item type.");
   const [table, parentColumn] = tables[body.type];
   const rows = await ctx.db.all(`SELECT id${parentColumn ? `, ${parentColumn} AS parent` : ""} FROM ${table} WHERE id IN (${ids.map(() => "?").join(",")})`, ...ids);
@@ -502,11 +387,6 @@ export async function handleReorder(ctx) {
   const access = await accessFor(ctx);
   if (body.type === "space" || body.type === "category") requireAdmin(ctx);
   if (body.type === "document" && !access.canCreateIn(parent)) throw forbidden("You can't reorder documents in this category.");
-  const statements = ids.map((id, i) => [`UPDATE ${table} SET position = ? WHERE id = ?`, [i + 1, id]]);
-  if (body.type === "step") {
-    const document = await editableDocument(ctx, parent);
-    statements.push(touch(ctx, document.id));
-  }
-  await ctx.db.batch(statements);
+  await ctx.db.batch(ids.map((id, i) => [`UPDATE ${table} SET position = ? WHERE id = ?`, [i + 1, id]]));
   return json({ ok: true });
 }

@@ -7,6 +7,7 @@
 
 import { nowIso } from "./db.js";
 import { HttpError, badRequest, forbidden, json } from "./http.js";
+import { accessFor } from "./permissions.js";
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -71,10 +72,12 @@ export async function putFile(env, path, bytes, contentType, fetchImpl = fetch) 
 
 // POST /api/files?kind=image|file
 // kind=image accepts JPEG, PNG, GIF and WebP up to 10 MB, for every member
-// (profile photos). Other files are limited to admins until milestone 5.
-export async function handleUpload({ db, env, request, url, user, fetchImpl }) {
+// (profile photos). kind=file accepts any file up to 50 MB, for members who
+// can edit at least one document (PDFs and attachments in documents).
+export async function handleUpload(ctx) {
+  const { db, env, request, url, user, fetchImpl } = ctx;
   const kind = url.searchParams.get("kind") === "file" ? "file" : "image";
-  if (kind === "file" && !user.is_admin) throw forbidden("You can't upload files here.");
+  if (kind === "file" && !(await accessFor(ctx)).canEditAnything) throw forbidden("Only editors can upload files.");
   const limit = kind === "image" ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
   const declared = Number(request.headers.get("Content-Length") || 0);
   if (declared > limit) throw new HttpError(413, `This file is too large (${limit / 1024 / 1024} MB maximum).`);

@@ -2,7 +2,7 @@
 
 A web app for company handbooks (SOPs) and team training. One frontend, hosted on GitHub Pages, serves every company. Each company runs its own backend on Bunny: one edge script, one Bunny Database and one Storage zone.
 
-This README covers what is built so far (milestones 1 to 4: foundations, people, content and permissions, CSV import). It will become the full setup guide in milestone 9.
+This README covers what is built so far (milestones 1 to 5: foundations, people, content and permissions, CSV import, editor and review). It will become the full setup guide in milestone 9.
 
 ## How it fits together
 
@@ -33,7 +33,7 @@ https://academy.onetake.ai/?workspace=https://police.academy.onetake.ai
 | `tests/` | Automated tests, run with Node's built-in test runner. |
 | `.github/workflows/` | Tests on every pull request, frontend publishing, edge script deployment. |
 
-There are no npm dependencies to install. The edge script imports two packages directly from npm at runtime (`@bunny.net/edgescript-sdk` and `@bunny.net/database-client`), with exact versions.
+There are no npm dependencies to install. The edge script imports two packages directly from npm at runtime (`@bunny.net/edgescript-sdk` and `@bunny.net/database-client`), with exact versions. The editor's browser libraries (Tiptap, ProseMirror, DOMPurify) are copied into `web/vendor/` by `node tools/vendor.mjs`; see `CLAUDE.md`.
 
 ## Running it on your computer
 

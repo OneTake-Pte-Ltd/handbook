@@ -1,0 +1,21 @@
+{
+  "comment": "Browser libraries copied into web/vendor/ by tools/vendor.mjs. Change versions here, then run: node tools/vendor.mjs",
+  "packages": {
+    "@tiptap/core": "3.33.1",
+    "@tiptap/pm": "3.33.1",
+    "@tiptap/starter-kit": "3.33.1",
+    "@tiptap/extension-table": "3.33.1",
+    "@tiptap/extensions": "3.33.1",
+    "dompurify": "3.4.17"
+  },
+  "entries": [
+    "@tiptap/core",
+    "@tiptap/starter-kit",
+    "@tiptap/extension-table",
+    "@tiptap/extensions",
+    "@tiptap/pm/state",
+    "@tiptap/pm/view",
+    "@tiptap/pm/model",
+    "dompurify"
+  ]
+}

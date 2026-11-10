@@ -293,6 +293,7 @@ a {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  white-space: nowrap;
   padding: 2px var(--space-2);
   border-radius: 999px;
   font-size: var(--text-xs);
@@ -728,10 +729,8 @@ a {
 
 .section-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   gap: var(--space-5);
-  max-width: 1200px;
-  margin: 0 auto;
 }
 
 .subnav {
@@ -749,7 +748,7 @@ a {
   padding: 0 var(--space-3);
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1199px) {
   .section-layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -814,13 +813,13 @@ a {
   font-size: var(--text-sm);
 }
 
-/* Tables. Below 640px each row becomes a card. */
+/* Tables. Below 900px each row becomes a card. */
 
 .table-wrap {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .table {
@@ -883,7 +882,7 @@ a {
   gap: var(--space-1);
 }
 
-@media (max-width: 639px) {
+@media (max-width: 899px) {
   .table thead {
     position: absolute;
     width: 1px;
@@ -910,6 +909,11 @@ a {
     padding: var(--space-1) 0;
     border: 0;
     text-align: right;
+  }
+
+  .table td[data-label]:empty,
+  .table td[data-label]:has(> .tags:empty) {
+    display: none;
   }
 
   .table td[data-label]::before {
@@ -1397,16 +1401,6 @@ fieldset.field legend {
   font-weight: 700;
 }
 
-.prose {
-  font-size: var(--text-md);
-  line-height: 1.7;
-  overflow-wrap: break-word;
-}
-
-.prose p {
-  margin: 0 0 var(--space-4);
-}
-
 .step-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1415,17 +1409,6 @@ fieldset.field legend {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
   border-top: 1px solid var(--border);
-}
-
-.editor-textarea {
-  width: 100%;
-  min-height: 320px;
-  padding: var(--space-3);
-  border: 1px solid var(--input-border);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  line-height: 1.6;
-  resize: vertical;
 }
 
 .edit-bar {
@@ -1548,6 +1531,10 @@ fieldset.field legend {
   padding-right: 0;
 }
 
-.progress-cell {
+.nowrap {
   white-space: nowrap;
+}
+
+.person .muted {
+  overflow-wrap: anywhere;
 }

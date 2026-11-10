@@ -223,6 +223,24 @@ img {
   clip: auto;
 }
 
+/* The Documents tree belongs to Knowledge. Elsewhere it is hidden; on phones
+   the drawer then only holds the main menu. */
+.shell[data-section="other"] .sidebar__header,
+.shell[data-section="other"] .sidebar__body {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .shell[data-section="other"] .sidebar,
+  .shell[data-section="other"] .backdrop {
+    display: none;
+  }
+
+  .topbar[data-section="other"] .topbar__menu-button {
+    display: none;
+  }
+}
+
 /* Below 1024px: sidebar becomes a drawer, main menu collapses to icons. */
 @media (max-width: 1023px) {
   .topbar__menu-button {

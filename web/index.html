@@ -11,10 +11,61 @@
     <link rel="stylesheet" href="css/tokens.css" />
     <link rel="stylesheet" href="css/components.css" />
     <link rel="stylesheet" href="css/layout.css" />
+    <link rel="stylesheet" href="css/editor.css" />
     <!-- Browser libraries (Tiptap, DOMPurify) are added to this import map, with
          exact pinned versions from jsDelivr, in the milestones that need them. -->
     <script type="importmap">
-      { "imports": {} }
+      {
+        "imports": {
+          "@tiptap/core": "./vendor/@tiptap/core@3.33.1/dist/index.js",
+          "@tiptap/core/jsx-runtime": "./vendor/@tiptap/core@3.33.1/jsx-runtime/index.js",
+          "@tiptap/extension-blockquote": "./vendor/@tiptap/extension-blockquote@3.33.1/dist/index.js",
+          "@tiptap/extension-bold": "./vendor/@tiptap/extension-bold@3.33.1/dist/index.js",
+          "@tiptap/extension-code": "./vendor/@tiptap/extension-code@3.33.1/dist/index.js",
+          "@tiptap/extension-code-block": "./vendor/@tiptap/extension-code-block@3.33.1/dist/index.js",
+          "@tiptap/extension-document": "./vendor/@tiptap/extension-document@3.33.1/dist/index.js",
+          "@tiptap/extension-hard-break": "./vendor/@tiptap/extension-hard-break@3.33.1/dist/index.js",
+          "@tiptap/extension-heading": "./vendor/@tiptap/extension-heading@3.33.1/dist/index.js",
+          "@tiptap/extension-horizontal-rule": "./vendor/@tiptap/extension-horizontal-rule@3.33.1/dist/index.js",
+          "@tiptap/extension-italic": "./vendor/@tiptap/extension-italic@3.33.1/dist/index.js",
+          "@tiptap/extension-link": "./vendor/@tiptap/extension-link@3.33.1/dist/index.js",
+          "@tiptap/extension-list": "./vendor/@tiptap/extension-list@3.33.1/dist/index.js",
+          "@tiptap/extension-paragraph": "./vendor/@tiptap/extension-paragraph@3.33.1/dist/index.js",
+          "@tiptap/extension-strike": "./vendor/@tiptap/extension-strike@3.33.1/dist/index.js",
+          "@tiptap/extension-table": "./vendor/@tiptap/extension-table@3.33.1/dist/index.js",
+          "@tiptap/extension-text": "./vendor/@tiptap/extension-text@3.33.1/dist/index.js",
+          "@tiptap/extension-underline": "./vendor/@tiptap/extension-underline@3.33.1/dist/index.js",
+          "@tiptap/extensions": "./vendor/@tiptap/extensions@3.33.1/dist/index.js",
+          "@tiptap/pm/commands": "./vendor/@tiptap/pm@3.33.1/dist/commands/index.js",
+          "@tiptap/pm/dropcursor": "./vendor/@tiptap/pm@3.33.1/dist/dropcursor/index.js",
+          "@tiptap/pm/gapcursor": "./vendor/@tiptap/pm@3.33.1/dist/gapcursor/index.js",
+          "@tiptap/pm/history": "./vendor/@tiptap/pm@3.33.1/dist/history/index.js",
+          "@tiptap/pm/keymap": "./vendor/@tiptap/pm@3.33.1/dist/keymap/index.js",
+          "@tiptap/pm/model": "./vendor/@tiptap/pm@3.33.1/dist/model/index.js",
+          "@tiptap/pm/schema-list": "./vendor/@tiptap/pm@3.33.1/dist/schema-list/index.js",
+          "@tiptap/pm/state": "./vendor/@tiptap/pm@3.33.1/dist/state/index.js",
+          "@tiptap/pm/tables": "./vendor/@tiptap/pm@3.33.1/dist/tables/index.js",
+          "@tiptap/pm/transform": "./vendor/@tiptap/pm@3.33.1/dist/transform/index.js",
+          "@tiptap/pm/view": "./vendor/@tiptap/pm@3.33.1/dist/view/index.js",
+          "@tiptap/starter-kit": "./vendor/@tiptap/starter-kit@3.33.1/dist/index.js",
+          "dompurify": "./vendor/dompurify@3.4.17/dist/purify.es.mjs",
+          "linkifyjs": "./vendor/linkifyjs@4.4.0/dist/linkify.mjs",
+          "orderedmap": "./vendor/orderedmap@2.1.1/dist/index.js",
+          "prosemirror-commands": "./vendor/prosemirror-commands@1.7.2/dist/index.js",
+          "prosemirror-dropcursor": "./vendor/prosemirror-dropcursor@1.8.4/dist/index.js",
+          "prosemirror-gapcursor": "./vendor/prosemirror-gapcursor@1.4.1/dist/index.js",
+          "prosemirror-history": "./vendor/prosemirror-history@1.5.1/dist/index.js",
+          "prosemirror-keymap": "./vendor/prosemirror-keymap@1.2.3/dist/index.js",
+          "prosemirror-model": "./vendor/prosemirror-model@1.25.13/dist/index.js",
+          "prosemirror-schema-list": "./vendor/prosemirror-schema-list@1.6.0/dist/index.js",
+          "prosemirror-state": "./vendor/prosemirror-state@1.4.4/dist/index.js",
+          "prosemirror-tables": "./vendor/prosemirror-tables@1.8.5/dist/index.js",
+          "prosemirror-transform": "./vendor/prosemirror-transform@1.12.5/dist/index.js",
+          "prosemirror-view": "./vendor/prosemirror-view@1.42.9/dist/index.js",
+          "rope-sequence": "./vendor/rope-sequence@1.3.4/dist/index.js",
+          "w3c-keyname": "./vendor/w3c-keyname@2.2.8/index.js"
+        }
+      }
     </script>
     <script type="module" src="js/app.js"></script>
   </head>
