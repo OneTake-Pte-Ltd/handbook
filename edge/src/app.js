@@ -53,6 +53,7 @@ import {
   handleViewStep,
 } from "./lib/content.js";
 import { handleDeleteGrant, handleListGrants, handlePutGrant } from "./lib/grants.js";
+import { handleImport } from "./lib/import.js";
 
 async function handleGetSettings({ db, user }) {
   requireAdmin({ user });
@@ -113,6 +114,7 @@ const ROUTES = [
   ["GET", "/api/grants", handleListGrants],
   ["PUT", "/api/grants", handlePutGrant],
   ["DELETE", "/api/grants/:id", handleDeleteGrant],
+  ["POST", "/api/import", handleImport],
 ].map(([method, pattern, handler, options = {}]) => ({
   method,
   handler,

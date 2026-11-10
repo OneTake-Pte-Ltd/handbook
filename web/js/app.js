@@ -16,6 +16,7 @@ const ROUTES = [
   { path: /^\/doc\/\d+(?:\/step\/\d+)?$/, nav: "knowledge", load: () => import("./views/document.js") },
   { path: /^\/profile$/, load: () => import("./views/profile.js") },
   { path: /^\/settings$/, nav: "settings", allowed: isAdmin, load: () => import("./views/settings.js") },
+  { path: /^\/settings\/import$/, nav: "settings", allowed: isAdmin, load: () => import("./views/import.js") },
   {
     path: /^\/organization(?:\/.*)?$/,
     nav: "organization",

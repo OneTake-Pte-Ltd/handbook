@@ -105,7 +105,9 @@ async function send(base, method, path, { body, token } = {}) {
     data = null;
   }
   if (!response.ok) {
-    throw new ApiError(response.status, (data && data.error) || `The workspace answered with an error (${response.status}).`, data && data.code);
+    const error = new ApiError(response.status, (data && data.error) || `The workspace answered with an error (${response.status}).`, data && data.code);
+    error.data = data;
+    throw error;
   }
   return data;
 }

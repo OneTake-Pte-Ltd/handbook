@@ -2,7 +2,7 @@
 
 A web app for company handbooks (SOPs) and team training. One frontend, hosted on GitHub Pages, serves every company. Each company runs its own backend on Bunny: one edge script, one Bunny Database and one Storage zone.
 
-This README covers what is built so far (milestones 1 to 3: foundations, people, content and permissions). It will become the full setup guide in milestone 9.
+This README covers what is built so far (milestones 1 to 4: foundations, people, content and permissions, CSV import). It will become the full setup guide in milestone 9.
 
 ## How it fits together
 
