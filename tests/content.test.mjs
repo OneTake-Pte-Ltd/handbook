@@ -13,12 +13,12 @@ async function handbook() {
   async function editDraft(id, mutate, token = admin) {
     const opened = await call("GET", `/api/documents/${id}/draft`, undefined, token);
     if (opened.status !== 200) return opened;
-    const snapshot = opened.body.draft.snapshot;
+    const draft = opened.body.draft;
+    const snapshot = draft ? draft.snapshot : opened.body.snapshot;
     mutate(snapshot);
-    return call("PUT", `/api/documents/${id}/draft`, { snapshot, base_updated_at: opened.body.draft.updated_at }, token);
+    return call("PUT", `/api/documents/${id}/draft`, { snapshot, base_updated_at: draft ? draft.updated_at : null }, token);
   }
   async function publish(id, revision = "minor", token = admin) {
-    await call("GET", `/api/documents/${id}/draft`, undefined, token);
     return call("POST", `/api/documents/${id}/draft/publish`, { revision_type: revision }, token);
   }
   async function doc(title, { publish: shouldPublish = true, steps = [] } = {}) {

@@ -1401,16 +1401,6 @@ fieldset.field legend {
   font-weight: 700;
 }
 
-.prose {
-  font-size: var(--text-md);
-  line-height: 1.7;
-  overflow-wrap: break-word;
-}
-
-.prose p {
-  margin: 0 0 var(--space-4);
-}
-
 .step-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1419,17 +1409,6 @@ fieldset.field legend {
   margin-top: var(--space-6);
   padding-top: var(--space-4);
   border-top: 1px solid var(--border);
-}
-
-.editor-textarea {
-  width: 100%;
-  min-height: 320px;
-  padding: var(--space-3);
-  border: 1px solid var(--input-border);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  line-height: 1.6;
-  resize: vertical;
 }
 
 .edit-bar {

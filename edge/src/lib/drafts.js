@@ -88,27 +88,21 @@ async function draftView(ctx, document, draft, level) {
   };
 }
 
-// GET /api/documents/:id/draft — opens (and if needed starts) the draft.
+// GET /api/documents/:id/draft
+// Returns the open draft, or, when nobody is editing, the published content
+// as a starting point (draft: null). The draft itself is created by the first
+// save, so merely opening a document in Edit mode leaves no trace.
 export async function handleGetDraft(ctx) {
   const { document, level } = await requireEditor(ctx, ctx.params.id);
-  let draft = await ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", document.id);
-  let created = false;
-  if (!draft) {
-    const now = nowIso();
-    const snapshot = await publishedSnapshot(ctx.db, document);
-    await ctx.db.run(
-      `INSERT INTO drafts (document_id, snapshot_json, status, author_id, created_at, updated_at)
-       VALUES (?, ?, 'editing', ?, ?, ?) ON CONFLICT(document_id) DO NOTHING`,
-      document.id,
-      JSON.stringify(snapshot),
-      ctx.user.id,
-      now,
-      now,
-    );
-    draft = await ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", document.id);
-    created = draft.author_id === ctx.user.id && draft.created_at === now;
-  }
-  return json({ ...(await draftView(ctx, document, draft, level)), created });
+  const draft = await ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", document.id);
+  if (draft) return json(await draftView(ctx, document, draft, level));
+  return json({
+    draft: null,
+    snapshot: await publishedSnapshot(ctx.db, document),
+    published: document.published_at ? await publishedSnapshot(ctx.db, document) : null,
+    document: { id: document.id, is_published: Boolean(document.is_published), published_at: document.published_at },
+    permissions: { level, can_edit: true, can_publish: level === "edit_publish", can_submit: false, can_review: false, can_discard: false, is_author: false },
+  });
 }
 
 // Validates and cleans a snapshot sent by the editor.
@@ -132,18 +126,34 @@ function parseSnapshot(body, existingStepIds) {
 }
 
 // PUT /api/documents/:id/draft { snapshot, base_updated_at }
+// base_updated_at is the draft's updated_at when the editor loaded it, or
+// null when there was no draft yet (this save then starts it).
 export async function handleSaveDraft(ctx) {
   const { document } = await requireEditor(ctx, ctx.params.id);
   const body = await readJson(ctx.request, 5_000_000);
   const draft = await ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", document.id);
-  if (!draft) throw notFound("This draft was discarded or published. Reload to start a new one.");
-  if (draft.status === "submitted") throw forbidden("This draft is waiting for review and can't be changed.");
-  if (body.base_updated_at !== draft.updated_at) {
-    throw new HttpError(409, "Someone else saved this draft in the meantime. The latest version has been loaded.", { code: "draft_conflict" });
+  const conflict = () => new HttpError(409, "Someone else saved this draft in the meantime. The latest version has been loaded.", { code: "draft_conflict" });
+  if (draft && draft.status === "submitted") throw forbidden("This draft is waiting for review and can't be changed.");
+  if ((draft ? draft.updated_at : null) !== (body.base_updated_at ?? null)) {
+    if (!draft) throw new HttpError(409, "This draft was published or discarded in the meantime. The latest version has been loaded.", { code: "draft_conflict" });
+    throw conflict();
   }
   const stepIds = new Set((await ctx.db.all("SELECT id FROM steps WHERE document_id = ?", document.id)).map((s) => s.id));
   const snapshot = parseSnapshot(body, stepIds);
   const now = nowIso();
+  if (!draft) {
+    const result = await ctx.db.run(
+      `INSERT INTO drafts (document_id, snapshot_json, status, author_id, created_at, updated_at)
+       VALUES (?, ?, 'editing', ?, ?, ?) ON CONFLICT(document_id) DO NOTHING`,
+      document.id,
+      JSON.stringify(snapshot),
+      ctx.user.id,
+      now,
+      now,
+    );
+    if (!result.rowsAffected) throw conflict();
+    return json({ updated_at: now, snapshot, created: true });
+  }
   const result = await ctx.db.run(
     "UPDATE drafts SET snapshot_json = ?, status = 'editing', updated_at = ? WHERE id = ? AND updated_at = ?",
     JSON.stringify(snapshot),
@@ -151,7 +161,7 @@ export async function handleSaveDraft(ctx) {
     draft.id,
     draft.updated_at,
   );
-  if (!result.rowsAffected) throw new HttpError(409, "Someone else saved this draft in the meantime. The latest version has been loaded.", { code: "draft_conflict" });
+  if (!result.rowsAffected) throw conflict();
   return json({ updated_at: now, snapshot });
 }
 
@@ -263,9 +273,11 @@ export async function handlePublishDraft(ctx) {
   const { document, level } = await requireEditor(ctx, ctx.params.id);
   if (level !== "edit_publish") throw forbidden("Publishing needs Edit and publish. Submit the draft for review instead.");
   const body = await readJson(ctx.request);
-  const draft = await ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", document.id);
-  if (!draft) throw notFound("There is no draft to publish.");
-  if (draft.status === "submitted") throw badRequest("This draft is waiting for review. Approve it instead.");
+  let draft = await ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", document.id);
+  if (draft && draft.status === "submitted") throw badRequest("This draft is waiting for review. Approve it instead.");
+  // Without a draft, the published content is published again (for example
+  // to make everyone complete the document again with a major revision).
+  if (!draft) draft = { id: 0, snapshot_json: JSON.stringify(await publishedSnapshot(ctx.db, document)) };
   const result = await applyDraft(ctx, document, draft, revisionOf(body));
   return json({ ok: true, ...result });
 }

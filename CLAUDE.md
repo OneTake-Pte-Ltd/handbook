@@ -47,7 +47,13 @@ Delete `dev/local.db` and `dev/uploads/` (with the dev server stopped) to start 
 - An automatic **Everyone** department contains every active member; it can't be renamed or deleted.
 - Team leaders manage only the departments they lead, never admins, never leader or admin flags. An existing email added by a leader joins the department; a deactivated account needs an admin.
 - The workspace always keeps one active admin; nobody deactivates or demotes themselves.
-- Until drafts (milestone 5), edits save directly: *Edit with review* may only change unpublished documents.
+- **Drafts:** one per document, a snapshot of title, description and ordered steps (Tiptap JSON). A draft starts on the first save, not when a document is merely opened in Edit mode. Autosave runs 1.5 s after a change; saves carry the draft's `updated_at` and a mismatch returns 409. Publishing without a draft republishes the current content (useful for a major revision).
+- **Review:** *Edit with review* submits; the draft is read-only until reviewed. Reviewers are non-admin members with *Edit and publish* on the document, or all admins if there are none; admins can always review. Review mode flags steps as Added, Changed or Removed by comparing with the published version.
+- **Editor content** is Tiptap JSON. `edge/src/lib/richtext.js` cleans it on save (known nodes and marks only; links http/https/mailto; files and images https; video players https) and derives `content_text` for search. Custom blocks live in `web/js/editor/nodes.js` and render identically in the read-only viewer.
+- **HTML embeds** render in an `srcdoc` iframe sandboxed without `allow-same-origin`; a script injected into the srcdoc posts its height to the parent (`web/js/editor/embed-frame.js`).
+- **Embed previews** (`GET /api/embed-preview`) refuse private and local addresses, including through redirects.
+- **Pasting** from Google Docs or Notion keeps headings, lists, links, bold, italic and tables only (`cleanPastedHtml` in `web/js/editor/setup.js`).
+- The "Write with the AI writer / Use the editor" choice on empty steps arrives with the AI writer (milestone 8).
 - Titles are Bleached Cedar with a Golden Grass accent bar; completion checks are a Golden Grass circle with a Bleached Cedar tick (Golden Grass on white fails contrast for text).
 - Reordering uses pointer events (mouse and touch) plus Move up / Move down for keyboards.
 - The Documents tree in the sidebar only shows in the Knowledge section.
@@ -62,7 +68,7 @@ Only these. Ask the product owner before adding anything.
 | Edge script | `@bunny.net/edgescript-sdk` | 0.13.0 | `npm:` import in `edge/src/main.js` | Change the version in the import, run the tests, deploy |
 | Edge script | `@bunny.net/database-client` | 0.0.3 | `npm:` import in `edge/src/main.js` | Same |
 | Browser | Montserrat | | Bunny Fonts stylesheet in `web/index.html` | Nothing to pin |
-| Browser | Tiptap 3.33.1 (`@tiptap/core`, `pm`, `starter-kit`, `extension-table`, `extension-image`, `extensions`), DOMPurify 3.4.17, and their dependencies | see `web/vendor/manifest.json` | Copied into `web/vendor/` and mapped in the import map of `web/index.html`; no CDN at runtime | See "Vendored browser libraries" |
+| Browser | Tiptap 3.33.1 (`@tiptap/core`, `pm`, `starter-kit`, `extension-table`, `extensions`), DOMPurify 3.4.17, and their dependencies | see `web/vendor/manifest.json` | Copied into `web/vendor/` and mapped in the import map of `web/index.html`; no CDN at runtime | See "Vendored browser libraries" |
 | CI | `actions/checkout@v5`, `actions/setup-node@v5`, `actions/upload-artifact@v4`, `actions/configure-pages@v5`, `actions/upload-pages-artifact@v3`, `actions/deploy-pages@v4` | | `.github/workflows/` | Bump the major version when GitHub deprecates one |
 
 Never use Google Fonts. Never load a library from a CDN at runtime.
@@ -78,7 +84,7 @@ Browser libraries are not loaded from jsDelivr or any CDN. `tools/vendor.mjs` (h
 
 To update: change the versions (or add an entry point) in `tools/vendor.json`, run `node tools/vendor.mjs`, run the tests (`tests/vendor.test.mjs` checks that every import resolves locally and that each package exists once), then try the editor in the browser. Commit `web/vendor/` and `web/index.html` together. Never edit files in `web/vendor/` by hand.
 
-Packages currently vendored (from `web/vendor/manifest.json`): Tiptap 3.33.1 (core, pm, starter-kit and the extensions it uses, extension-table, extension-image, extensions), DOMPurify 3.4.17, linkifyjs 4.4.0, prosemirror-commands 1.7.2, prosemirror-dropcursor 1.8.4, prosemirror-gapcursor 1.4.1, prosemirror-history 1.5.1, prosemirror-keymap 1.2.3, prosemirror-model 1.25.13, prosemirror-schema-list 1.6.0, prosemirror-state 1.4.4, prosemirror-tables 1.8.5, prosemirror-transform 1.12.5, prosemirror-view 1.42.9, orderedmap 2.1.1, rope-sequence 1.3.4, w3c-keyname 2.2.8. About 1.3 MB uncompressed, loaded only when a document is opened.
+Packages currently vendored (from `web/vendor/manifest.json`): Tiptap 3.33.1 (core, pm, starter-kit and the extensions it uses, extension-table, extensions), DOMPurify 3.4.17, linkifyjs 4.4.0, prosemirror-commands 1.7.2, prosemirror-dropcursor 1.8.4, prosemirror-gapcursor 1.4.1, prosemirror-history 1.5.1, prosemirror-keymap 1.2.3, prosemirror-model 1.25.13, prosemirror-schema-list 1.6.0, prosemirror-state 1.4.4, prosemirror-tables 1.8.5, prosemirror-transform 1.12.5, prosemirror-view 1.42.9, orderedmap 2.1.1, rope-sequence 1.3.4, w3c-keyname 2.2.8. About 1.3 MB uncompressed, loaded only when a document is opened.
 
 ## Writing style (interface text and documentation)
 

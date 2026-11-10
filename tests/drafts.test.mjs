@@ -12,9 +12,10 @@ async function setup() {
   const category = (await call("POST", "/api/categories", { space_id: space.id, name: "C" })).body.category;
   const open = (id, token) => call("GET", `/api/documents/${id}/draft`, undefined, token);
   async function save(id, mutate, token) {
-    const d = (await open(id, token)).body.draft;
-    mutate(d.snapshot);
-    return call("PUT", `/api/documents/${id}/draft`, { snapshot: d.snapshot, base_updated_at: d.updated_at }, token);
+    const opened = (await open(id, token)).body;
+    const snapshot = opened.draft ? opened.draft.snapshot : opened.snapshot;
+    mutate(snapshot);
+    return call("PUT", `/api/documents/${id}/draft`, { snapshot, base_updated_at: opened.draft ? opened.draft.updated_at : null }, token);
   }
   async function newDoc(title, text = "Version one") {
     const id = (await call("POST", "/api/documents", { category_id: category.id, title })).body.document.id;
@@ -45,18 +46,23 @@ test("readers never see work in progress", async () => {
   assert.equal(await s.t.db.value("SELECT COUNT(*) FROM steps_fts WHERE steps_fts MATCH 'secret'"), 0);
 });
 
-test("a second editor works on the same draft and sees who started it; stale saves are refused", async () => {
+test("opening in Edit mode starts nothing; the first save starts the draft; a second editor sees who; stale saves are refused", async () => {
   const s = await setup();
   const id = await s.newDoc("Shared");
   const pat = await s.member("Pat", [], { is_admin: true });
   const first = (await s.open(id)).body;
-  assert.equal(first.created, true);
-  const second = (await s.open(id, pat.token)).body;
-  assert.equal(second.created, false);
-  assert.equal(second.draft.author.name, "Ada Admin");
+  assert.equal(first.draft, null, "no draft just for opening");
+  assert.equal(await s.t.db.value("SELECT COUNT(*) FROM drafts"), 0);
+  const started = await s.call("PUT", `/api/documents/${id}/draft`, { snapshot: { ...first.snapshot, title: "Shared v2" }, base_updated_at: null });
+  assert.equal(started.status, 200);
+  assert.equal(started.body.created, true);
 
-  const ok = await s.call("PUT", `/api/documents/${id}/draft`, { snapshot: first.draft.snapshot, base_updated_at: first.draft.updated_at });
-  assert.equal(ok.status, 200);
+  const second = (await s.open(id, pat.token)).body;
+  assert.equal(second.draft.author.name, "Ada Admin");
+  assert.equal(second.draft.snapshot.title, "Shared v2");
+
+  const again = await s.call("PUT", `/api/documents/${id}/draft`, { snapshot: second.draft.snapshot, base_updated_at: started.body.updated_at });
+  assert.equal(again.status, 200);
   await new Promise((r) => setTimeout(r, 2));
   const stale = await s.call("PUT", `/api/documents/${id}/draft`, { snapshot: second.draft.snapshot, base_updated_at: second.draft.updated_at }, pat.token);
   assert.equal(stale.status, 409);
@@ -119,10 +125,10 @@ test("discarding: the author or Edit and publish only", async () => {
   const mia = await s.member("Mia", []);
   const nia = await s.member("Nia", []);
   for (const u of [mia, nia]) await s.call("PUT", "/api/grants", { target_type: "document", target_id: id, principal_type: "user", principal_id: u.id, level: "edit_review" });
-  await s.open(id, mia.token);
+  await s.save(id, (snap) => (snap.title = "Mia's version"), mia.token);
   assert.equal((await s.call("DELETE", `/api/documents/${id}/draft`, undefined, nia.token)).status, 403);
   assert.equal((await s.call("DELETE", `/api/documents/${id}/draft`, undefined, mia.token)).status, 204);
-  await s.open(id, nia.token);
+  await s.save(id, (snap) => (snap.title = "Nia's version"), nia.token);
   assert.equal((await s.call("DELETE", `/api/documents/${id}/draft`)).status, 204, "Edit and publish can discard anyone's draft");
 });
 

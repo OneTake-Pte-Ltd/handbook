@@ -13,7 +13,7 @@ const root = document.getElementById("app");
 // Routes. Views are loaded on demand and export render(main, params).
 const ROUTES = [
   { path: /^\/$/, nav: "knowledge", load: () => import("./views/home.js") },
-  { path: /^\/doc\/\d+(?:\/step\/\d+)?$/, nav: "knowledge", load: () => import("./views/document.js") },
+  { path: /^\/doc\/\d+(?:\/step\/[\w-]+)?$/, nav: "knowledge", load: () => import("./views/document.js") },
   { path: /^\/profile$/, load: () => import("./views/profile.js") },
   { path: /^\/settings$/, nav: "settings", allowed: isAdmin, load: () => import("./views/settings.js") },
   { path: /^\/settings\/import$/, nav: "settings", allowed: isAdmin, load: () => import("./views/import.js") },

@@ -10,7 +10,6 @@
     "@tiptap/extension-hard-break": "3.33.1",
     "@tiptap/extension-heading": "3.33.1",
     "@tiptap/extension-horizontal-rule": "3.33.1",
-    "@tiptap/extension-image": "3.33.1",
     "@tiptap/extension-italic": "3.33.1",
     "@tiptap/extension-link": "3.33.1",
     "@tiptap/extension-list": "3.33.1",

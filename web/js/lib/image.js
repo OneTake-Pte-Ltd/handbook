@@ -34,3 +34,20 @@ export async function squareImage(file, size = 256) {
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("The picture could not be prepared."))), "image/jpeg", 0.88);
   });
 }
+
+// Scales an image down so its longest side is at most maxSide pixels. Small
+// images are returned unchanged (keeping PNG transparency and GIF animation).
+export async function fitImage(file, maxSide = 2400, maxBytes = 9 * 1024 * 1024) {
+  if (file.type === "image/gif" || file.type === "image/svg+xml") return file;
+  const img = await loadImage(file);
+  const longest = Math.max(img.naturalWidth, img.naturalHeight);
+  if (longest <= maxSide && file.size <= maxBytes) return file;
+  const scale = Math.min(1, maxSide / longest);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+  canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("The picture could not be prepared."))), "image/webp", 0.86);
+  });
+}

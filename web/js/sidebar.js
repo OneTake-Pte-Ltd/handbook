@@ -143,7 +143,12 @@ export function createSidebar({ toolbar, body }) {
 
   function documentItem(category, doc, siblings) {
     const edit = isEditMode();
-    const tag = !doc.is_published ? h("span", { class: "tree__tag" }, "Draft") : null;
+    const tag =
+      doc.draft_status === "submitted"
+        ? h("span", { class: "tree__tag tree__tag--review" }, "In review")
+        : !doc.is_published || doc.draft_status
+          ? h("span", { class: "tree__tag" }, "Draft")
+          : null;
     const link = h(
       "a",
       { class: "tree__doc", href: `#/doc/${doc.id}`, "aria-current": doc.id === activeDocId ? "page" : null, title: doc.title },
