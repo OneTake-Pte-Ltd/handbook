@@ -9,18 +9,32 @@ async function handbook() {
   const call = (method, path, body, token = admin) => t.call(method, path, { token, body });
   const space = (await call("POST", "/api/spaces", { name: "The Academy" })).body.space;
   const category = (await call("POST", "/api/categories", { space_id: space.id, name: "How OneTake works", emoji: "📚" })).body.category;
-  async function doc(title, { publish = true, steps = [] } = {}) {
+  // Opens the draft, lets `mutate` change the snapshot, saves it.
+  async function editDraft(id, mutate, token = admin) {
+    const opened = await call("GET", `/api/documents/${id}/draft`, undefined, token);
+    if (opened.status !== 200) return opened;
+    const snapshot = opened.body.draft.snapshot;
+    mutate(snapshot);
+    return call("PUT", `/api/documents/${id}/draft`, { snapshot, base_updated_at: opened.body.draft.updated_at }, token);
+  }
+  async function publish(id, revision = "minor", token = admin) {
+    await call("GET", `/api/documents/${id}/draft`, undefined, token);
+    return call("POST", `/api/documents/${id}/draft/publish`, { revision_type: revision }, token);
+  }
+  async function doc(title, { publish: shouldPublish = true, steps = [] } = {}) {
     const created = await call("POST", "/api/documents", { category_id: category.id, title });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     const id = created.body.document.id;
-    for (const s of steps) await call("POST", `/api/documents/${id}/steps`, { title: s });
-    if (publish) assert.equal((await call("POST", `/api/documents/${id}/publish`, { publish: true })).status, 200);
+    if (steps.length) await editDraft(id, (s) => s.steps.push(...steps.map((t) => ({ title: t, content_json: paragraph("") }))));
+    if (shouldPublish) assert.equal((await publish(id)).status, 200);
     return id;
   }
   const grant = (target_type, target_id, principal_type, principal_id, level, mandatory = false, token = admin) =>
     call("PUT", "/api/grants", { target_type, target_id, principal_type, principal_id, level, mandatory }, token);
-  return { ...w, call, space, category, doc, grant };
+  return { ...w, call, space, category, doc, grant, editDraft, publish };
 }
+
+const paragraph = (text) => ({ type: "doc", content: [{ type: "paragraph", content: text ? [{ type: "text", text }] : [] }] });
 
 const treeDocIds = (tree) => tree.spaces.flatMap((s) => s.categories.flatMap((c) => c.documents.map((d) => d.id)));
 
@@ -51,10 +65,11 @@ test("Marketing (View on a category) and Product (Edit with review on one docume
   assert.deepEqual(treeDocIds(editTree).sort(), [a, b].sort(), "edit mode adds the document Mia can edit");
   assert.equal(editTree.can_edit, true);
 
-  assert.equal((await h.call("PATCH", `/api/documents/${b}`, { title: "ICP v2" }, mia.token)).status, 200);
-  assert.equal((await h.call("PATCH", `/api/documents/${a}`, { title: "x" }, mia.token)).status, 403);
-  assert.equal((await h.call("PATCH", `/api/documents/${c}`, { title: "x" }, mia.token)).status, 404, "unpublished and not editable: invisible");
-  assert.equal((await h.call("POST", `/api/documents/${b}/publish`, { publish: true }, mia.token)).status, 403, "Edit with review can't publish");
+  assert.equal((await h.editDraft(b, (s) => (s.title = "ICP v2"), mia.token)).status, 200);
+  assert.equal((await h.editDraft(a, (s) => (s.title = "x"), mia.token)).status, 403);
+  assert.equal((await h.editDraft(c, (s) => (s.title = "x"), mia.token)).status, 404, "unpublished and not editable: invisible");
+  assert.equal((await h.call("POST", `/api/documents/${b}/draft/publish`, { revision_type: "minor" }, mia.token)).status, 403, "Edit with review can't publish");
+  assert.equal((await h.call("POST", `/api/documents/${b}/draft/submit`, { revision_type: "minor" }, mia.token)).status, 200, "but can submit for review");
   assert.equal((await h.call("POST", "/api/documents", { category_id: h.category.id, title: "New" }, mia.token)).status, 403, "creating needs a category-level edit grant");
 });
 
@@ -131,12 +146,12 @@ test("a major revision drops the completion rate and notifies; a minor one does 
   const notifications = () => h.t.db.all("SELECT type FROM notifications WHERE user_id = ? ORDER BY id", sam.id);
   const before = (await notifications()).length;
 
-  await h.call("POST", `/api/documents/${a}/publish`, { publish: true, revision: "minor" });
+  await h.publish(a, "minor");
   assert.deepEqual(await rate(), { completed: 1, total: 1 });
   assert.equal((await notifications()).length, before);
 
   await new Promise((r) => setTimeout(r, 5));
-  await h.call("POST", `/api/documents/${a}/publish`, { publish: true, revision: "major" });
+  await h.publish(a, "major");
   assert.deepEqual(await rate(), { completed: 0, total: 1 });
   assert.equal((await notifications()).at(-1).type, "major_revision");
   const doc = (await h.call("GET", `/api/documents/${a}`, undefined, sam.token)).body;
@@ -151,7 +166,8 @@ test("a minor revision that adds a step leaves only that step to complete", asyn
   const sam = await h.member("Sam", []);
   const step = (await h.call("GET", `/api/documents/${a}`, undefined, sam.token)).body.steps[0].id;
   await h.call("POST", `/api/steps/${step}/complete`, undefined, sam.token);
-  await h.call("POST", `/api/documents/${a}/steps`, { title: "New part" });
+  await h.editDraft(a, (s) => s.steps.push({ title: "New part", content_json: paragraph("") }));
+  await h.publish(a, "minor");
   const progress = (await h.call("GET", `/api/documents/${a}`, undefined, sam.token)).body.progress;
   assert.deepEqual([progress.status, progress.done, progress.total], ["in_progress", 1, 2]);
 });
@@ -209,42 +225,26 @@ test("the Access tree marks documents whose settings differ from their category"
 test("publishing indexes the document for search; unpublishing and deleting remove it", async () => {
   const h = await handbook();
   const a = await h.doc("Refund policy", { publish: false });
-  const step = await h.t.db.value("SELECT id FROM steps WHERE document_id = ?", a);
-  await h.call("PATCH", `/api/steps/${step}`, { content_text: "Customers can ask for a refund within 30 days." });
-  await h.call("POST", `/api/documents/${a}/publish`, { publish: true });
+  await h.editDraft(a, (s) => (s.steps[0].content_json = paragraph("Customers can ask for a refund within 30 days.")));
+  assert.equal(await h.t.db.value("SELECT COUNT(*) FROM steps_fts"), 0, "drafts are never indexed");
+  await h.publish(a);
   const hits = await h.t.db.all("SELECT document_id FROM steps_fts WHERE steps_fts MATCH 'refund'");
   assert.deepEqual(hits.map((r) => r.document_id), [a]);
-  await h.call("POST", `/api/documents/${a}/publish`, { publish: false });
+  assert.equal(await h.t.db.value("SELECT content_text FROM steps WHERE document_id = ?", a), "Customers can ask for a refund within 30 days.");
+  await h.call("POST", `/api/documents/${a}/unpublish`);
   assert.equal(await h.t.db.value("SELECT COUNT(*) FROM steps_fts"), 0);
-  await h.call("POST", `/api/documents/${a}/publish`, { publish: true });
+  await h.publish(a);
   assert.equal((await h.call("DELETE", `/api/documents/${a}`)).status, 204);
   assert.equal(await h.t.db.value("SELECT COUNT(*) FROM steps_fts"), 0);
 });
 
-test("step text is stored as plain text and as Tiptap JSON", async () => {
+test("reordering: admins reorder categories, others are refused", async () => {
   const h = await handbook();
-  const a = await h.doc("Doc", { publish: false });
-  const step = await h.t.db.value("SELECT id FROM steps WHERE document_id = ?", a);
-  await h.call("PATCH", `/api/steps/${step}`, { content_text: "First line\nsecond line\n\nNew paragraph" });
-  const row = await h.t.db.first("SELECT content_json FROM steps WHERE id = ?", step);
-  const json = JSON.parse(row.content_json);
-  assert.equal(json.content.length, 2);
-  assert.deepEqual(json.content[0].content.map((n) => n.type), ["text", "hardBreak", "text"]);
-});
-
-test("reordering: admins reorder categories, editors reorder steps, others are refused", async () => {
-  const h = await handbook();
-  const a = await h.doc("Doc", { steps: ["Two", "Three"], publish: false });
-  const steps = (await h.t.db.all("SELECT id FROM steps WHERE document_id = ? ORDER BY position", a)).map((r) => r.id);
-  const reversed = [...steps].reverse();
-  assert.equal((await h.call("POST", "/api/reorder", { type: "step", ids: reversed })).status, 200);
-  assert.deepEqual((await h.t.db.all("SELECT id FROM steps WHERE document_id = ? ORDER BY position", a)).map((r) => r.id), reversed);
-  assert.equal((await h.call("POST", "/api/reorder", { type: "step", ids: reversed.slice(1) })).status, 409, "the full list is required");
-
   const second = (await h.call("POST", "/api/categories", { space_id: h.space.id, name: "Second" })).body.category;
   const sam = await h.member("Sam", []);
   assert.equal((await h.call("POST", "/api/reorder", { type: "category", ids: [second.id, h.category.id] }, sam.token)).status, 403);
   assert.equal((await h.call("POST", "/api/reorder", { type: "category", ids: [second.id, h.category.id] })).status, 200);
+  assert.equal((await h.call("POST", "/api/reorder", { type: "category", ids: [second.id] })).status, 409, "the full list is required");
 });
 
 test("deleting a category deletes its documents and their grants", async () => {

@@ -113,11 +113,10 @@ export function canView(access, document) {
   return atLeast(level, "edit_review");
 }
 
-// Milestone 3 rule until drafts arrive in milestone 5: "Edit with review"
-// can only change unpublished documents; published ones need "Edit and publish".
+// Editing happens in the document's draft, so "Edit with review" is enough
+// to edit; publishing needs "Edit and publish" (see drafts.js).
 export function canEditDocument(access, document) {
-  const level = access.level(document.id);
-  return document.is_published ? atLeast(level, "edit_publish") : atLeast(level, "edit_review");
+  return atLeast(access.level(document.id), "edit_review");
 }
 
 // Mandatory published documents for many users at once: Map(userId -> Set(docId)).
