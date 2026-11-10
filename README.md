@@ -2,7 +2,7 @@
 
 A web app for company handbooks (SOPs) and team training. One frontend, hosted on GitHub Pages, serves every company. Each company runs its own backend on Bunny: one edge script, one Bunny Database and one Storage zone.
 
-This README covers what is built so far (milestone 1: foundations). It will become the full setup guide in milestone 9.
+This README covers what is built so far (milestones 1 and 2: foundations and people). It will become the full setup guide in milestone 9.
 
 ## How it fits together
 
@@ -43,7 +43,7 @@ You need Node.js 22 or later.
 node dev/server.mjs
 ```
 
-Then open http://localhost:8080, enter `http://localhost:8787` as the workspace URL and `dev-setup-code` as the setup code. The local server uses a SQLite file, `dev/local.db`. Stop the server and delete that file to start again from an empty workspace.
+Then open http://localhost:8080, enter `http://localhost:8787` as the workspace URL and `dev-setup-code` as the setup code. The local server uses a SQLite file, `dev/local.db`, and saves uploads in `dev/uploads` instead of Bunny Storage. Stop the server and delete both to start again from an empty workspace.
 
 To run the tests:
 
@@ -85,16 +85,32 @@ On the script, open **Env Configuration → Environment Secrets** and add:
 | `ALLOWED_ORIGINS` | The websites allowed to use this workspace, separated by commas. For OneTake AI: `https://academy.onetake.ai`. Add `http://localhost:8080` while testing with the local frontend. |
 | `SETUP_CODE` | A long random code, used once to create the first admin. Keep it private. |
 
-The Storage secrets (`STORAGE_ZONE`, `STORAGE_KEY`, `STORAGE_REGION_HOST`, `PUBLIC_FILES_URL`) come with milestone 5.
+### 5. Set up file storage
 
-### 5. Deploy the code
+Profile photos (and, from milestone 5, images and files in documents) are stored in Bunny Storage.
+
+1. Open **Storage** and click **Add Storage Zone**. Choose the main region closest to your team, for example Singapore.
+2. Open the zone, then **Access**. Note the zone's **name**, its **password**, and its **hostname** (for example `sg.storage.bunnycdn.com`).
+3. Serve the zone through a pull zone: open **CDN**, create a pull zone, then in its **Origin** settings set **Origin Type** to **Bunny Storage Zone**, choose your storage zone, and click **Save**. The pull zone's address, for example `https://handbook-files-onetake.b-cdn.net`, is where files are served from. You can give it your own hostname, such as `files.academy.onetake.ai`.
+4. Add four more secrets to the edge script:
+
+| Secret | Value |
+|---|---|
+| `STORAGE_ZONE` | The storage zone's name |
+| `STORAGE_KEY` | The storage zone's password (not your account API key) |
+| `STORAGE_REGION_HOST` | The storage hostname, for example `sg.storage.bunnycdn.com` |
+| `PUBLIC_FILES_URL` | The pull zone's address, for example `https://handbook-files-onetake.b-cdn.net` |
+
+Files are stored under `uploads/<year>/<month>/` with a random name, so their addresses can't be guessed. They are public to anyone who has the address.
+
+### 6. Deploy the code
 
 Either way works:
 
 - **Automatically:** add the company to the `BUNNY_TENANTS` repository secret (see below). Every change to `edge/` merged into `main` is deployed to every company.
 - **By hand:** download the `edge-script` file from the **Tests** workflow run of a pull request (or run `node edge/build.mjs` and take `edge/dist/edge.mjs`), paste its content into the script editor in the Bunny dashboard, then **Save** and **Publish**.
 
-### 6. Create the first admin
+### 7. Create the first admin
 
 Open the frontend, enter the workspace URL, and fill in the "Create the first admin" form with the setup code. This only works while the workspace has no users.
 

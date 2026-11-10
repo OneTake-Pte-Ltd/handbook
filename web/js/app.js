@@ -18,8 +18,7 @@ const ROUTES = [
     path: /^\/organization(?:\/.*)?$/,
     nav: "organization",
     allowed: () => isAdmin() || isLeader(),
-    load: () => import("./views/placeholder.js"),
-    params: { title: "Organization", text: "Members and departments arrive in milestone 2." },
+    load: () => import("./views/organization.js"),
   },
   {
     path: /^\/reporting(?:\/.*)?$/,
@@ -67,10 +66,11 @@ function buildShell() {
   const me = session.me;
   const main = h("main", { class: "main", id: "main", tabindex: "-1" });
   const menuButton = h("button", { class: "icon-button topbar__menu-button", type: "button", "aria-label": "Open the menu", "aria-controls": "sidebar", "aria-expanded": "false" }, icon("menu"));
+  const menuName = h("strong", {}, fullName(me.user));
   const avatarMenu = h(
     "div",
     { class: "menu", id: "avatar-menu", hidden: true },
-    h("div", { class: "menu__header" }, h("div", { class: "small" }, h("strong", {}, fullName(me.user))), h("div", { class: "small muted" }, me.user.email)),
+    h("div", { class: "menu__header" }, h("div", { class: "small" }, menuName), h("div", { class: "small muted" }, me.user.email)),
     h("a", { class: "menu__item", href: "#/profile" }, icon("user"), "My profile"),
     h("button", { class: "menu__item", type: "button", onclick: switchWorkspace }, icon("workspace"), "Switch workspace"),
     h("button", { class: "menu__item", type: "button", onclick: logout }, icon("logout"), "Log out"),
@@ -178,6 +178,8 @@ function buildShell() {
     refreshBranding() {
       logoImg.src = workspaceLogo(session.me.workspace);
       logoName.textContent = session.me.workspace.name;
+      avatarButton.replaceChildren(avatar(session.me.user));
+      menuName.textContent = fullName(session.me.user);
     },
   };
 }
