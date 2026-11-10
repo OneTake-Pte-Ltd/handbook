@@ -68,7 +68,7 @@ export function renderForcedPasswordChange(root, { onDone, onLogout }) {
       onDone();
     },
   });
-  clear(root).append(
+  clear(root,
     h(
       "main",
       { class: "login" },

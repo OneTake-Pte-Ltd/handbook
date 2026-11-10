@@ -9,9 +9,10 @@
 //   run(sql, ...args)    -> { rowsAffected, lastInsertRowid }
 //   batch([[sql, args], ...]) -> runs every statement in one transaction
 
-export function fromBunnyClient(client) {
+// `getClient` returns the @bunny.net/database-client connection.
+export function fromBunnyClient(getClient) {
   const stmt = (sql, args) => {
-    const prepared = client.prepare(sql);
+    const prepared = getClient().prepare(sql);
     return args && args.length ? prepared.bind(...args.map(toSqlValue)) : prepared;
   };
   return {
@@ -32,7 +33,7 @@ export function fromBunnyClient(client) {
     async batch(statements, { foreignKeys = true } = {}) {
       const prepared = statements.map(([sql, args]) => stmt(sql, args || []));
       const options = foreignKeys ? { mode: "immediate" } : { mode: "immediate", foreignKeys: false };
-      const results = await client.batch(prepared, options);
+      const results = await getClient().batch(prepared, options);
       return results.map((r) => ({ rows: r.rows, rowsAffected: r.rowsAffected, lastInsertRowid: r.lastInsertRowid }));
     },
   };

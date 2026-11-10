@@ -158,7 +158,7 @@ function buildShell() {
   }, { signal: listeners.signal });
 
   const skip = h("a", { class: "skip-link", href: "#main", onclick: (e) => { e.preventDefault(); main.focus(); } }, "Skip to content");
-  clear(root).append(skip, topbar, body);
+  clear(root, skip, topbar, body);
 
   return {
     main,
@@ -195,13 +195,13 @@ async function route() {
   if (!match || (match.allowed && !match.allowed())) {
     shell.setActiveNav(null);
     setTitle("Not found");
-    clear(main).append(
+    clear(main,
       h("div", { class: "page" }, h("h1", { class: "page-title" }, "Page not found"), h("p", {}, "This page doesn't exist or you don't have access to it. "), h("a", { href: "#/" }, "Back to the home page")),
     );
     return;
   }
   shell.setActiveNav(match.nav || null);
-  clear(main).append(loading());
+  clear(main, loading());
   try {
     const view = await match.load();
     if (ticket !== renderCount) return; // a newer navigation started
@@ -210,7 +210,7 @@ async function route() {
   } catch (error) {
     if (ticket !== renderCount) return;
     console.error(error);
-    clear(main).append(h("div", { class: "page" }, h("div", { class: "alert alert--error", role: "alert" }, error.message || "Something went wrong.")));
+    clear(main, h("div", { class: "page" }, h("div", { class: "alert alert--error", role: "alert" }, error.message || "Something went wrong.")));
   }
   if (renderCount > 1) main.focus({ preventScroll: true });
 }
@@ -218,7 +218,7 @@ async function route() {
 async function startSession() {
   if (shell) shell.destroy();
   shell = null;
-  clear(root).append(loading());
+  clear(root, loading());
   session.me = await api("GET", "/me");
   if (session.me.user.must_change_password) {
     renderForcedPasswordChange(root, { onDone: startSession, onLogout: logout });

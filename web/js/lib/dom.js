@@ -36,9 +36,11 @@ export function append(parent, children) {
   return parent;
 }
 
-export function clear(el) {
+// Empties an element, then appends the given children (null and false are skipped,
+// unlike the native append, which would print "null").
+export function clear(el, ...children) {
   while (el.firstChild) el.firstChild.remove();
-  return el;
+  return append(el, children);
 }
 
 // Inline SVG icon from the hand-written set in icons.js. Decorative by default.

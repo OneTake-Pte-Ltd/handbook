@@ -12,8 +12,25 @@ import { connect } from "npm:@bunny.net/database-client@0.0.3";
 import process from "node:process";
 import { createApp } from "./app.js";
 import { fromBunnyClient } from "./lib/db.js";
+import { HttpError } from "./lib/http.js";
 
-const db = fromBunnyClient(connect({ timeout: 20_000 }));
+// Connects on first use, so a missing secret becomes a readable API error
+// instead of a script that fails to start.
+let client = null;
+function bunnyClient() {
+  if (!client) {
+    if (!process.env.BUNNY_DATABASE_URL || !process.env.BUNNY_DATABASE_AUTH_TOKEN) {
+      throw new HttpError(
+        503,
+        "The database is not connected to this edge script. In Bunny, open the database, then Access, and click Add Secrets to Edge Script.",
+      );
+    }
+    client = connect({ timeout: 20_000 });
+  }
+  return client;
+}
+
+const db = fromBunnyClient(bunnyClient);
 const app = createApp({ db, env: process.env });
 
 BunnySDK.net.http.serve((request) => app.handle(request));

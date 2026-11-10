@@ -35,6 +35,10 @@ export function errorResponse(error) {
     return json({ error: error.message, ...error.extra }, error.status);
   }
   console.error(error && error.stack ? error.stack : error);
+  // Errors from @bunny.net/database-client: say so, with its short code only.
+  if (error && error.name === "DatabaseError" && error.code) {
+    return json({ error: `The workspace can't use its database right now (${error.code}). Please try again, or check the database secrets.` }, 503);
+  }
   return json({ error: "Something went wrong on the server. Please try again." }, 500);
 }
 

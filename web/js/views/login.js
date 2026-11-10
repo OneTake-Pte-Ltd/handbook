@@ -18,7 +18,7 @@ const MIN_PASSWORD = 10;
 // options: { invitedUrl, chooseWorkspace, message, onLoggedIn }
 export function renderLogin(root, options) {
   const card = h("div", { class: "card login__card" });
-  clear(root).append(h("main", { class: "login" }, card));
+  clear(root, h("main", { class: "login" }, card));
 
   const startUrl = options.invitedUrl || (options.chooseWorkspace ? null : currentWorkspace() || listWorkspaces()[0]?.url);
   if (startUrl) checkWorkspace(startUrl, options.message);
@@ -35,7 +35,7 @@ export function renderLogin(root, options) {
   }
 
   // Step 1: choose or type the workspace URL.
-  function showChooser(message, prefill = "") {
+  function showChooser(message, prefill = "", isError = false) {
     const error = alertBox();
     const urlInput = input({ type: "url", name: "workspace", autocomplete: "url", inputmode: "url", placeholder: "https://handbook.yourcompany.com", value: prefill, required: true });
     const submit = h("button", { class: "button button--primary button--block", type: "submit" }, "Continue");
@@ -66,9 +66,9 @@ export function renderLogin(root, options) {
       submit,
     );
 
-    clear(card).append(
+    clear(card,
       brand("Log in to your handbook"),
-      message ? h("div", { class: "alert alert--info", role: "status", style: "margin-bottom:16px" }, message) : null,
+      message ? h("div", { class: `alert alert--${isError ? "error" : "info"}`, role: isError ? "alert" : "status", style: "margin-bottom:16px" }, message) : null,
       saved.length
         ? h(
             "div",
@@ -100,16 +100,19 @@ export function renderLogin(root, options) {
 
   // Calls GET /api/info to check the workspace, then shows login or setup.
   async function checkWorkspace(url, message) {
-    clear(card).append(loading("Connecting to the workspace"));
+    clear(card, loading("Connecting to the workspace"));
     let info;
     try {
       info = await fetchInfo(url);
     } catch (error) {
+      // Status 0: no answer the browser could read (wrong address, server down,
+      // or an error page without CORS headers). Otherwise the server's message.
       showChooser(
-        error.status === 403
-          ? "This workspace doesn't accept logins from this website yet. Ask your admin to add this site to ALLOWED_ORIGINS."
-          : "We couldn't reach this workspace. Check the address and try again.",
+        error.status
+          ? error.message
+          : "We couldn't reach this workspace. Check the address. If it is correct, the workspace's edge script may not be running yet.",
         url,
+        true,
       );
       return;
     }
@@ -169,7 +172,7 @@ export function renderLogin(root, options) {
       field({ label: "Password", input: password }),
       submit,
     );
-    clear(card).append(
+    clear(card,
       brand(info.name, workspaceLogo(info)),
       message ? h("div", { class: "alert alert--info", role: "status", style: "margin-bottom:16px" }, message) : null,
       workspaceBar(url),
@@ -240,7 +243,7 @@ export function renderLogin(root, options) {
       field({ label: "Confirm password", input: confirm }),
       submit,
     );
-    clear(card).append(
+    clear(card,
       brand("Create the first admin", workspaceLogo(info), "This workspace is new. The first account you create here is an admin."),
       workspaceBar(url),
       form,
