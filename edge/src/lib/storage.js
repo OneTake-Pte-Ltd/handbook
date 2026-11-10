@@ -40,11 +40,26 @@ export function safeFileName(name) {
   return (cleaned || "file").slice(-80);
 }
 
+// The edge script uses Bunny Storage's HTTP API. S3-compatible zones show their
+// S3 endpoint (for example sg-s3.storage.bunnycdn.com) in the dashboard; the
+// matching HTTP API host is sg.storage.bunnycdn.com (storage.bunnycdn.com for
+// Frankfurt). Either form is accepted here.
+export function storageHost(value) {
+  const host = String(value || "")
+    .trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "")
+    .toLowerCase();
+  const s3 = /^([a-z]+)-s3\.storage\.bunnycdn\.com$/.exec(host);
+  if (s3) return s3[1] === "de" ? "storage.bunnycdn.com" : `${s3[1]}.storage.bunnycdn.com`;
+  return host;
+}
+
 export function storageConfig(env) {
   const config = {
     zone: env.STORAGE_ZONE,
     key: env.STORAGE_KEY,
-    host: String(env.STORAGE_REGION_HOST || "").replace(/^https?:\/\//, "").replace(/\/+$/, ""),
+    host: storageHost(env.STORAGE_REGION_HOST),
     publicUrl: String(env.PUBLIC_FILES_URL || "").replace(/\/+$/, ""),
   };
   if (!config.zone || !config.key || !config.host || !config.publicUrl) {
@@ -82,6 +97,9 @@ export async function putFile(env, path, bytes, contentType, fetchImpl = fetch) 
 export function storageErrorMessage(status, config) {
   if (status === 401) {
     return `The file could not be stored: Bunny Storage refused the access (HTTP 401). Check STORAGE_KEY (the storage zone's password from FTP & API Access, not the read-only password) and STORAGE_REGION_HOST (it must be the hostname shown on that page, for example sg.storage.bunnycdn.com; now ${config.host}).`;
+  }
+  if (status === 403) {
+    return `The file could not be stored: Bunny Storage refused the access (HTTP 403). Check that STORAGE_KEY is the storage zone's password (not the read-only password or an S3 key) and that STORAGE_ZONE is the zone's exact name (now "${config.zone}").`;
   }
   if (status === 404) return `The file could not be stored: Bunny Storage has no zone called "${config.zone}" at ${config.host} (HTTP 404). Check STORAGE_ZONE and STORAGE_REGION_HOST.`;
   return `The file could not be stored: Bunny Storage answered HTTP ${status}. Please try again.`;
