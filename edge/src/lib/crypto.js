@@ -3,8 +3,9 @@
 
 // Iteration count for new password hashes. Each user row stores its own count,
 // so this value can be raised later without breaking existing passwords.
-// See README, "Password hashing", for how it was measured.
-export const PBKDF2_ITERATIONS = 600_000;
+// Measured on Bunny Edge Scripting in November 2026: about 200 ms per hash.
+// See README, "Password hashing cost".
+export const PBKDF2_ITERATIONS = 1_000_000;
 export const MIN_PASSWORD_LENGTH = 10;
 
 const encoder = new TextEncoder();

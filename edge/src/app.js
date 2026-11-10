@@ -6,7 +6,6 @@ import { HttpError, corsHeaders, errorResponse, forbidden, json, notFound, parse
 import { migrate } from "./lib/migrations.js";
 import {
   authenticate,
-  handleBench,
   handleChangePassword,
   handleInfo,
   handleLogin,
@@ -38,7 +37,6 @@ const ROUTES = [
   ["GET", "/api/info", handleInfo, { public: true }],
   ["POST", "/api/setup", handleSetup, { public: true }],
   ["POST", "/api/login", handleLogin, { public: true }],
-  ["POST", "/api/bench", handleBench, { public: true }],
   ["POST", "/api/logout", handleLogout, { allowPasswordChange: true }],
   ["POST", "/api/password", handleChangePassword, { allowPasswordChange: true }],
   ["GET", "/api/me", handleMe, { allowPasswordChange: true }],

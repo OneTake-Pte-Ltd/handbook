@@ -230,6 +230,18 @@ export async function handleLogin({ db, request }) {
   if (!user.is_active) throw forbidden("This account is deactivated. Please contact an admin.");
 
   await db.run("UPDATE users SET last_login_at = ? WHERE id = ?", nowIso(), user.id);
+  // Passwords hashed with an older, lower iteration count are upgraded now,
+  // while we have the plain password.
+  if (Number(user.password_iterations) < PBKDF2_ITERATIONS) {
+    const upgraded = await hashPassword(password);
+    await db.run(
+      "UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ? WHERE id = ?",
+      upgraded.hash,
+      upgraded.salt,
+      upgraded.iterations,
+      user.id,
+    );
+  }
   const token = await createSession(db, user.id);
   return json({ token, user: publicUser(user) });
 }
@@ -294,21 +306,4 @@ export async function handleMe({ db, user }) {
       ai_enabled: Boolean(settings.anthropic_api_key),
     },
   });
-}
-
-// POST /api/bench: temporary, protected by SETUP_CODE. Times PBKDF2 at a few
-// iteration counts on Bunny so we can choose PBKDF2_ITERATIONS. Remove after.
-export async function handleBench({ env, request }) {
-  const body = await readJson(request);
-  const setupCode = String(env.SETUP_CODE || "");
-  if (!setupCode || !timingSafeEqual(String(body.setup_code || ""), setupCode)) {
-    throw forbidden("The setup code is incorrect.");
-  }
-  const results = [];
-  for (const iterations of [100_000, 300_000, 600_000, 1_000_000]) {
-    const start = performance.now();
-    await pbkdf2Hex("benchmark-password", DUMMY_SALT, iterations);
-    results.push({ iterations, milliseconds: Math.round(performance.now() - start) });
-  }
-  return json({ results });
 }
