@@ -49,5 +49,14 @@ export async function render(main, { refreshBranding }) {
     h("div", { class: "form-actions" }, submit),
   );
 
-  page.append(h("section", { class: "card", "aria-labelledby": "ws-title" }, h("h2", { class: "section-title", id: "ws-title" }, "Workspace"), form));
+  page.append(
+    h("section", { class: "card", "aria-labelledby": "ws-title" }, h("h2", { class: "section-title", id: "ws-title" }, "Workspace"), form),
+    h(
+      "section",
+      { class: "card", "aria-labelledby": "import-title" },
+      h("h2", { class: "section-title", id: "import-title" }, "Import from CSV"),
+      h("p", { class: "small" }, "Create spaces, categories, documents and department access from CSV files, for example when moving from another intranet."),
+      h("a", { class: "button", href: "#/settings/import" }, "Open the import"),
+    ),
+  );
 }
