@@ -83,7 +83,12 @@ export function createApp({ db, env }) {
     const origin = request.headers.get("Origin");
 
     if (origin && !allowedOrigins.includes(origin.replace(/\/+$/, ""))) {
-      throw forbidden("This website is not allowed to use this workspace. Add it to ALLOWED_ORIGINS.");
+      // Readable by that website, so the login screen can say what is wrong.
+      // It only ever reveals this fixed message.
+      return withHeaders(
+        json({ error: `This workspace does not accept ${origin} yet. Add it to the ALLOWED_ORIGINS secret of the edge script.`, code: "origin_not_allowed" }, 403),
+        { "Access-Control-Allow-Origin": origin, Vary: "Origin" },
+      );
     }
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Cache-Control": "no-store" } });
     if (url.pathname === "/" || url.pathname === "/api" || url.pathname === "/api/") {

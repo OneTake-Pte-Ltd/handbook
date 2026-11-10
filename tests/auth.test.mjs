@@ -181,7 +181,12 @@ test("CORS: allowed origins get headers, other origins are refused", async () =>
 
   const evil = await t.call("GET", "/api/info", { origin: "https://evil.example.com" });
   assert.equal(evil.status, 403);
-  assert.equal(evil.headers.get("Access-Control-Allow-Origin"), null);
+  assert.equal(evil.body.code, "origin_not_allowed");
+  assert.equal(evil.body.name, undefined, "no workspace data is returned");
+  // The refusal is readable by that website so the login screen can explain it,
+  // but it never allows credentials or other methods.
+  assert.equal(evil.headers.get("Access-Control-Allow-Origin"), "https://evil.example.com");
+  assert.equal(evil.headers.get("Access-Control-Allow-Headers"), null);
 
   assert.equal(allowed.headers.get("Cache-Control"), "no-store");
 });
