@@ -49,6 +49,17 @@ export async function render(main, { refreshBranding }) {
     h("div", { class: "form-actions" }, submit),
   );
 
+  const rebuild = h("button", { class: "button", type: "button" }, "Rebuild search index");
+  rebuild.addEventListener("click", () =>
+    busy(rebuild, async () => {
+      try {
+        const result = await api("POST", "/search/rebuild");
+        toast(`Search index rebuilt: ${result.documents} documents, ${result.steps} steps.`);
+      } catch (e) {
+        toast(e.message, { kind: "error" });
+      }
+    }),
+  );
   page.append(
     h("section", { class: "card", "aria-labelledby": "ws-title" }, h("h2", { class: "section-title", id: "ws-title" }, "Workspace"), form),
     h(
@@ -57,6 +68,13 @@ export async function render(main, { refreshBranding }) {
       h("h2", { class: "section-title", id: "import-title" }, "Import from CSV"),
       h("p", { class: "small" }, "Create spaces, categories, documents and department access from CSV files, for example when moving from another intranet."),
       h("a", { class: "button", href: "#/settings/import" }, "Open the import"),
+    ),
+    h(
+      "section",
+      { class: "card", "aria-labelledby": "search-title" },
+      h("h2", { class: "section-title", id: "search-title" }, "Search index"),
+      h("p", { class: "small" }, "The search index updates on every publication. Rebuild it if search results look wrong or incomplete."),
+      rebuild,
     ),
   );
 }
