@@ -20,6 +20,12 @@ import {
 import { fullName, relativeTime } from "../lib/format.js";
 import { isAdmin, session } from "../state.js";
 import { openAddMemberDialog, temporaryPasswordPanel } from "./member-form.js";
+import { renderAccessTree } from "./access.js";
+
+export function completionText(completion) {
+  if (!completion || !completion.total) return "No mandatory documents";
+  return `${Math.round((completion.completed / completion.total) * 100)}% (${completion.completed} of ${completion.total})`;
+}
 
 function departmentTags(departments = []) {
   return h(
@@ -102,6 +108,7 @@ export async function renderMembersList(container) {
           h("td", {}, h("div", { class: "person" }, avatar(u), h("div", {}, h("a", { href: `#/organization/members/${u.id}` }, fullName(u)), h("div", { class: "muted small" }, u.email)))),
           h("td", { "data-label": "Role" }, u.role_title || ""),
           h("td", { "data-label": "Departments" }, departmentTags(u.departments)),
+          h("td", { class: "progress-cell", "data-label": "Completion" }, completionText(u.completion)),
           h("td", { "data-label": "Last login" }, u.last_login_at ? relativeTime(u.last_login_at) : "Never"),
           h("td", { "data-label": "Status" }, h("div", { class: "tags" }, statusBadges(u), u.is_active && !u.is_admin ? "Active" : null)),
         ),
@@ -116,7 +123,7 @@ export async function renderMembersList(container) {
         h(
           "table",
           { class: "table" },
-          h("thead", {}, h("tr", {}, ["Name", "Role", "Departments", "Last login", "Status"].map((t) => h("th", { scope: "col" }, t)))),
+          h("thead", {}, h("tr", {}, ["Name", "Role", "Departments", "Completion", "Last login", "Status"].map((t) => h("th", { scope: "col" }, t)))),
           tbody,
         ),
       ),
@@ -295,6 +302,27 @@ export async function renderMemberPage(container, id) {
         : null,
     ),
   );
+
+  // Access: user-level grants, with the effective access and its source.
+  if (user.is_active && (isAdmin() || permissions.can_edit_details) && !(self && !isAdmin())) {
+    const tree = h("div");
+    container.append(
+      h(
+        "section",
+        { class: "card", "aria-labelledby": "access-title" },
+        h("h2", { class: "section-title", id: "access-title" }, "Access"),
+        h(
+          "p",
+          { class: "muted small" },
+          user.is_admin
+            ? "Admins can edit everything. Grants here only decide what is mandatory for them."
+            : "Grants for this member only. They can add access but never remove what a department gives. Muted text shows the effective access and where it comes from.",
+        ),
+        tree,
+      ),
+    );
+    renderAccessTree(tree, { type: "user", id: user.id });
+  }
 
   // Account actions
   const actions = [];

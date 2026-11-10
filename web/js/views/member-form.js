@@ -36,12 +36,15 @@ export function openAddMemberDialog({ departments, preset, onSaved }) {
 
   const rows = choices.map((d) => {
     const member = h("input", { type: "checkbox", value: String(d.id), checked: d.id === preset || (!admin && choices.length === 1) });
-    const leader = h("input", { type: "checkbox", disabled: !(d.id === preset) });
+    const leader = h("input", { type: "checkbox" });
+    // Ticking "Team leader" also ticks the department; unticking the
+    // department also unticks "Team leader".
+    leader.addEventListener("change", () => {
+      if (leader.checked) member.checked = true;
+    });
     member.addEventListener("change", () => {
-      leader.disabled = !member.checked;
       if (!member.checked) leader.checked = false;
     });
-    leader.disabled = !member.checked;
     return {
       id: d.id,
       member,

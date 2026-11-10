@@ -23,8 +23,8 @@ export function render(main) {
         "div",
         { class: "card empty-state" },
         icon("knowledge"),
-        h("h2", { class: "section-title" }, "Your handbook is empty for now"),
-        h("p", { class: "small", style: "margin:0" }, "Documents you can read will appear here and in the sidebar."),
+        h("h2", { class: "section-title" }, "Welcome to your handbook"),
+        h("p", { class: "small", style: "margin:0" }, "Choose a document in the sidebar to start reading. Your progress and the documents you must complete will appear here soon."),
       ),
     ),
   );
