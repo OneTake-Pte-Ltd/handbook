@@ -1,38 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createTestApp, setupAdmin } from "./helpers.mjs";
-
-// Sets up a workspace with an admin, and returns helpers to create members
-// and log in as them (temporary password, then a chosen password).
-async function workspace() {
-  const t = createTestApp();
-  const admin = await setupAdmin(t);
-  const departments = (await t.call("GET", "/api/departments", { token: admin })).body.departments;
-  const dept = Object.fromEntries(departments.map((d) => [d.name, d.id]));
-
-  async function create(token, body) {
-    return t.call("POST", "/api/users", { token, body });
-  }
-  async function login(email, password) {
-    const res = await t.call("POST", "/api/login", { body: { email, password } });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
-    return res.body.token;
-  }
-  // Creates a member as admin, sets a real password, returns { id, token }.
-  async function member(first, departments, extra = {}) {
-    const email = `${first.toLowerCase()}@example.com`;
-    const res = await create(admin, { first_name: first, last_name: "Test", email, departments, ...extra });
-    assert.equal(res.status, 201, JSON.stringify(res.body));
-    const token = await login(email, res.body.temporary_password);
-    const changed = await t.call("POST", "/api/password", {
-      token,
-      body: { current_password: res.body.temporary_password, new_password: "member password 1" },
-    });
-    assert.equal(changed.status, 200);
-    return { id: res.body.user.id, email, token };
-  }
-  return { t, admin, dept, create, login, member };
-}
+import { createTestApp, setupAdmin, workspace } from "./helpers.mjs";
 
 test("admin creates a member with a temporary password that must be changed", async () => {
   const { t, admin, dept, create, login } = await workspace();

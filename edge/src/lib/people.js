@@ -14,6 +14,7 @@ import { nowIso } from "./db.js";
 import { HttpError, badRequest, forbidden, json, noContent, normalizeEmail, notFound, optionalString, readJson, requireString } from "./http.js";
 import { hashPassword, temporaryPassword } from "./crypto.js";
 import { publicUser } from "./auth.js";
+import { completionRates } from "./progress.js";
 
 // Statements that create an in-app notification (shown from milestone 6).
 export function notificationStatement(userId, type, payload) {
@@ -156,7 +157,8 @@ export async function handleListUsers(ctx) {
     ...args,
   );
   const memberships = await membershipsByUser(ctx.db, users.map((u) => u.id));
-  return json({ users: users.map((u) => memberSummary(u, memberships.get(u.id))) });
+  const rates = await completionRates(ctx.db, users);
+  return json({ users: users.map((u) => ({ ...memberSummary(u, memberships.get(u.id)), completion: rates.get(u.id) })) });
 }
 
 // GET /api/users/:id

@@ -203,3 +203,67 @@ export function switchInput({ checked, label, onchange, disabled }) {
   if (onchange) box.addEventListener("change", () => onchange(box.checked, box));
   return h("label", { class: "switch" }, box, h("span", {}, label));
 }
+
+// A "⋯" button that opens a small menu. items: [{ label, onClick, danger, disabled }]
+export function popupMenu(items, { label = "More actions", className = "small-icon-button" } = {}) {
+  const menu = h("div", { class: "menu", hidden: true, role: "menu" });
+  const button = h("button", { class: className, type: "button", "aria-label": label, "aria-haspopup": "true", "aria-expanded": "false" }, icon("more"));
+  const wrap = h("div", { class: "menu-wrap" }, button, menu);
+  const close = () => {
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+    document.removeEventListener("click", outside, true);
+  };
+  const outside = (event) => {
+    if (!wrap.contains(event.target)) close();
+  };
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!menu.hidden) return close();
+    clear(
+      menu,
+      items
+        .filter(Boolean)
+        .map((item) =>
+          h(
+            "button",
+            {
+              class: "menu__item",
+              type: "button",
+              role: "menuitem",
+              disabled: Boolean(item.disabled),
+              style: item.danger ? "color:var(--danger-text)" : null,
+              onclick: (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                close();
+                item.onClick();
+              },
+            },
+            item.label,
+          ),
+        ),
+    );
+    menu.hidden = false;
+    button.setAttribute("aria-expanded", "true");
+    menu.querySelector(".menu__item:not([disabled])")?.focus();
+    document.addEventListener("click", outside, true);
+  });
+  menu.addEventListener("keydown", (event) => {
+    const options = [...menu.querySelectorAll(".menu__item:not([disabled])")];
+    const index = options.indexOf(document.activeElement);
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      close();
+      button.focus();
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      options[(index + 1) % options.length]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      options[(index - 1 + options.length) % options.length]?.focus();
+    }
+  });
+  return wrap;
+}

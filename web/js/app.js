@@ -6,12 +6,14 @@ import { fullName } from "./lib/format.js";
 import { isAdmin, isLeader, session, workspaceLogo } from "./state.js";
 import { renderLogin } from "./views/login.js";
 import { renderForcedPasswordChange } from "./views/password.js";
+import { createSidebar } from "./sidebar.js";
 
 const root = document.getElementById("app");
 
 // Routes. Views are loaded on demand and export render(main, params).
 const ROUTES = [
   { path: /^\/$/, nav: "knowledge", load: () => import("./views/home.js") },
+  { path: /^\/doc\/\d+(?:\/step\/\d+)?$/, nav: "knowledge", load: () => import("./views/document.js") },
   { path: /^\/profile$/, load: () => import("./views/profile.js") },
   { path: /^\/settings$/, nav: "settings", allowed: isAdmin, load: () => import("./views/settings.js") },
   {
@@ -112,6 +114,8 @@ function buildShell() {
     ),
   );
 
+  const sidebarToolbar = h("div", { class: "sidebar__toolbar", style: "flex:1" });
+  const sidebarBody = h("div", { class: "sidebar__body" });
   const sidebar = h(
     "aside",
     { class: "sidebar", id: "sidebar", "aria-label": "Handbook contents" },
@@ -119,11 +123,18 @@ function buildShell() {
     h(
       "div",
       { class: "sidebar__header" },
-      h("strong", { class: "small" }, "Documents"),
+      sidebarToolbar,
       h("button", { class: "icon-button sidebar__close", type: "button", "aria-label": "Close the menu", onclick: () => setDrawer(false) }, icon("close")),
     ),
-    h("div", { class: "sidebar__body" }, h("div", { class: "empty-state small" }, icon("knowledge"), h("p", {}, "Your handbook is empty for now."))),
+    sidebarBody,
   );
+  const tree = createSidebar({ toolbar: sidebarToolbar, body: sidebarBody });
+  window.addEventListener("handbook:content-changed", () => tree.refresh(), { signal: listeners.signal });
+  window.addEventListener("handbook:edit-mode", () => {
+    tree.refresh();
+    route();
+  }, { signal: listeners.signal });
+  window.addEventListener("handbook:active-document", (event) => tree.setActive(event.detail), { signal: listeners.signal });
   const backdrop = h("div", { class: "backdrop", onclick: () => setDrawer(false) });
   const body = h("div", { class: "shell" }, sidebar, backdrop, main);
 
@@ -162,6 +173,7 @@ function buildShell() {
 
   return {
     main,
+    tree,
     destroy() {
       listeners.abort();
     },
@@ -203,6 +215,7 @@ async function route() {
     return;
   }
   shell.setActiveNav(match.nav || null);
+  if (!path.startsWith("/doc/")) shell.tree.setActive(null);
   clear(main, loading());
   try {
     const view = await match.load();

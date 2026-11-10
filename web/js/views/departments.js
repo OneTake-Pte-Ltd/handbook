@@ -5,6 +5,7 @@ import { alertBox, avatar, busy, clear, confirmDialog, field, h, icon, input, lo
 import { fullName } from "../lib/format.js";
 import { isAdmin } from "../state.js";
 import { openAddMemberDialog } from "./member-form.js";
+import { renderAccessTree } from "./access.js";
 
 export async function renderDepartmentsList(container) {
   setTitle("Departments", "Organization");
@@ -212,6 +213,21 @@ export async function renderDepartmentPage(container, id) {
         ),
       ),
     );
+  }
+
+  // Access: department-level grants.
+  if (permissions.can_add_members || isAdmin()) {
+    const tree = h("div");
+    container.append(
+      h(
+        "section",
+        { class: "card", style: "margin-top:24px", "aria-labelledby": "access-title" },
+        h("h2", { class: "section-title", id: "access-title" }, "Access"),
+        h("p", { class: "muted small" }, "What every member of this department can see and do. A document's own setting replaces its category's setting; ≠ marks those documents."),
+        tree,
+      ),
+    );
+    renderAccessTree(tree, { type: "department", id: department.id });
   }
 
   if (permissions.can_rename) {

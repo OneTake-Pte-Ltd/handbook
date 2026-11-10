@@ -26,6 +26,7 @@ import {
 } from "./crypto.js";
 import { getSettings, setSettings } from "./settings.js";
 import { LATEST_VERSION } from "./migrations.js";
+import { accessFor } from "./permissions.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_DAYS = 30;
@@ -292,10 +293,13 @@ export async function userDepartments(db, user) {
 }
 
 // GET /api/me
-export async function handleMe({ db, user }) {
+export async function handleMe(ctx) {
+  const { db, user } = ctx;
   const departments = await userDepartments(db, user);
   const settings = await getSettings(db);
+  const access = await accessFor(ctx);
   return json({
+    can_edit: access.canEditAnything,
     user: publicUser(user),
     departments,
     leads: departments.filter((d) => d.is_leader).map((d) => d.id),
