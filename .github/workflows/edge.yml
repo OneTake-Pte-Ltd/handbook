@@ -1,0 +1,53 @@
+# Builds the edge script and deploys it to every company listed in the
+# BUNNY_TENANTS repository secret (see README, "Deploying the edge script").
+# Nothing about the companies is printed: logs of public repositories are public.
+name: Deploy edge script
+
+on:
+  push:
+    branches: [main]
+    paths: ["edge/**", ".github/workflows/edge.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edge-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run the tests
+        run: node --test 'tests/*.test.mjs'
+      - name: Build the edge script
+        run: node edge/build.mjs
+      - name: Deploy to every company
+        env:
+          BUNNY_TENANTS: ${{ secrets.BUNNY_TENANTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BUNNY_TENANTS:-}" ]; then
+            echo "The BUNNY_TENANTS secret is not set; nothing to deploy."
+            exit 0
+          fi
+          count=$(jq 'length' <<<"$BUNNY_TENANTS")
+          jq -Rs '{Code: .}' edge/dist/edge.mjs > payload.json
+          for i in $(seq 0 $((count - 1))); do
+            id=$(jq -r ".[$i].script_id" <<<"$BUNNY_TENANTS")
+            key=$(jq -r ".[$i].deploy_key" <<<"$BUNNY_TENANTS")
+            echo "::add-mask::$id"
+            echo "::add-mask::$key"
+            curl -fsS -o /dev/null -X POST "https://api.bunny.net/compute/script/$id/code" \
+              -H "DeploymentKey: $key" -H "Content-Type: application/json" -H "Accept: application/json" \
+              --data-binary @payload.json
+            curl -fsS -o /dev/null -X POST "https://api.bunny.net/compute/script/$id/publish" \
+              -H "DeploymentKey: $key" -H "Accept: application/json"
+            echo "Company $((i + 1)) of $count deployed."
+          done
