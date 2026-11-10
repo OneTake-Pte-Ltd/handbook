@@ -254,3 +254,11 @@ test("upload errors explain what to check in the Storage settings", async () => 
   assert.match(storageErrorMessage(401, config), /STORAGE_KEY.*STORAGE_REGION_HOST.*storage\.bunnycdn\.com/);
   assert.match(storageErrorMessage(404, config), /handbook-files/);
 });
+
+test("S3 endpoints are converted to the matching Bunny Storage HTTP host", async () => {
+  const { storageHost } = await import("../edge/src/lib/storage.js");
+  assert.equal(storageHost("https://sg-s3.storage.bunnycdn.com"), "sg.storage.bunnycdn.com");
+  assert.equal(storageHost("de-s3.storage.bunnycdn.com"), "storage.bunnycdn.com");
+  assert.equal(storageHost("SG.storage.bunnycdn.com/"), "sg.storage.bunnycdn.com");
+  assert.equal(storageHost("storage.bunnycdn.com"), "storage.bunnycdn.com");
+});

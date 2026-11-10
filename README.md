@@ -97,8 +97,8 @@ Profile photos (and, from milestone 5, images and files in documents) are stored
 | Secret | Value |
 |---|---|
 | `STORAGE_ZONE` | The storage zone's name |
-| `STORAGE_KEY` | The storage zone's password (not your account API key) |
-| `STORAGE_REGION_HOST` | The storage hostname, for example `sg.storage.bunnycdn.com` |
+| `STORAGE_KEY` | The storage zone's password (not the read-only password, and not your account API key). For an S3-compatible zone it is the same as the S3 secret access key. |
+| `STORAGE_REGION_HOST` | The storage hostname, for example `sg.storage.bunnycdn.com` (Frankfurt: `storage.bunnycdn.com`). For an S3-compatible zone, its S3 endpoint (for example `sg-s3.storage.bunnycdn.com`) also works: the edge script uses the matching storage host. |
 | `PUBLIC_FILES_URL` | The pull zone's address, for example `https://handbook-files-onetake.b-cdn.net` |
 
 Files are stored under `uploads/<year>/<month>/` with a random name, so their addresses can't be guessed. They are public to anyone who has the address.
