@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run the tests
+        run: node --test 'tests/*.test.mjs'
+      - name: Build the edge script
+        run: node edge/build.mjs
+      - name: Keep the built edge script for manual deployment
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-script
+          path: edge/dist/edge.mjs
+          retention-days: 14

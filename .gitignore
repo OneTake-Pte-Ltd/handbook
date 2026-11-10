@@ -1,0 +1,4 @@
+edge/dist/
+node_modules/
+.DS_Store
+dev/local.db*

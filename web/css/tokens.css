@@ -1,0 +1,83 @@
+/* Brand tokens. Use these variables everywhere; never hard-code a color.
+   Contrast notes (WCAG AA):
+   - Golden Grass on Alabaster or White is 1.9:1, so it is never used for text
+     or as the only carrier of meaning on light backgrounds. It is used for
+     backgrounds (buttons, badges, bars), with Bleached Cedar on top (8.4:1).
+   - On Bleached Cedar backgrounds, Golden Grass text passes (8.4:1).
+   - --text-muted is 5.6:1 on Alabaster and 5.9:1 on White.
+   - --danger-text is 6.1:1 on White; plain Cabaret (4.5:1) is for fills only. */
+
+:root {
+  /* Brand */
+  --golden-grass: #e3ae28;
+  --bleached-cedar: #241826;
+  --alabaster: #f8f7f7;
+  --white: #ffffff;
+  --cabaret: #d33e5d;
+  --cold-turkey: #d1b0b3;
+
+  /* Derived tints */
+  --gold-50: #fdf7e7;
+  --gold-100: #fbf1d9;
+  --gold-200: #f4dc9c;
+  --gold-600: #c9951a;
+  --cedar-50: #f3f1f3;
+  --cedar-100: #e8e4e8;
+  --cedar-200: #d6d0d7;
+  --cedar-300: #b9b0bb;
+  --cedar-700: #6b6070;
+  --cedar-800: #4a3f4c;
+  --cabaret-50: #fcebef;
+
+  /* Roles */
+  --bg: var(--alabaster);
+  --surface: var(--white);
+  --surface-muted: var(--cedar-50);
+  --text: var(--bleached-cedar);
+  --text-muted: var(--cedar-700);
+  --text-on-accent: var(--bleached-cedar);
+  --text-on-dark: var(--white);
+  --border: var(--cedar-100);
+  --border-strong: var(--cedar-200);
+  --input-border: var(--cedar-300);
+  --accent: var(--golden-grass);
+  --accent-hover: var(--gold-600);
+  --accent-soft: var(--gold-100);
+  --accent-softer: var(--gold-50);
+  --hover: var(--cedar-50);
+  --danger: var(--cabaret);
+  --danger-text: #b32f4c;
+  --danger-soft: var(--cabaret-50);
+  --quiet: var(--cold-turkey);
+  --focus: var(--bleached-cedar);
+
+  /* Type */
+  --font: "Montserrat", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+
+  /* Space, shape, depth */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(36, 24, 38, 0.06);
+  --shadow: 0 2px 8px rgba(36, 24, 38, 0.08);
+  --shadow-lg: 0 12px 32px rgba(36, 24, 38, 0.16);
+
+  /* Layout */
+  --topbar-height: 60px;
+  --sidebar-width: 300px;
+  --touch: 44px;
+}
