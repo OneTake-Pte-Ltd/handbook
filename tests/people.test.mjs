@@ -247,3 +247,10 @@ test("uploads explain when storage is not configured", async () => {
   );
   assert.equal(res.status, 503);
 });
+
+test("upload errors explain what to check in the Storage settings", async () => {
+  const { storageErrorMessage } = await import("../edge/src/lib/storage.js");
+  const config = { zone: "handbook-files", host: "storage.bunnycdn.com" };
+  assert.match(storageErrorMessage(401, config), /STORAGE_KEY.*STORAGE_REGION_HOST.*storage\.bunnycdn\.com/);
+  assert.match(storageErrorMessage(404, config), /handbook-files/);
+});

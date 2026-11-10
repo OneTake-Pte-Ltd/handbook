@@ -58,16 +58,33 @@ export function storageConfig(env) {
 
 export async function putFile(env, path, bytes, contentType, fetchImpl = fetch) {
   const config = storageConfig(env);
-  const response = await fetchImpl(`https://${config.host}/${encodeURIComponent(config.zone)}/${path}`, {
-    method: "PUT",
-    headers: { AccessKey: config.key, "Content-Type": contentType },
-    body: bytes,
-  });
+  let response;
+  try {
+    response = await fetchImpl(`https://${config.host}/${encodeURIComponent(config.zone)}/${path}`, {
+      method: "PUT",
+      headers: { AccessKey: config.key, "Content-Type": contentType },
+      body: bytes,
+    });
+  } catch (error) {
+    console.error(`Storage upload failed: ${error && error.message}`);
+    throw new HttpError(502, `The file could not be stored: Bunny Storage can't be reached at ${config.host}. Check STORAGE_REGION_HOST.`);
+  }
   if (!response.ok) {
-    console.error(`Storage upload failed: HTTP ${response.status}`);
-    throw new HttpError(502, "The file could not be stored. Please try again.");
+    const detail = (await response.text().catch(() => "")).slice(0, 200);
+    console.error(`Storage upload failed: HTTP ${response.status} ${detail}`);
+    throw new HttpError(502, storageErrorMessage(response.status, config));
   }
   return `${config.publicUrl}/${path}`;
+}
+
+// Explains a refusal from Bunny Storage to the person setting it up. No secret
+// is included: the zone name and region host are not secret.
+export function storageErrorMessage(status, config) {
+  if (status === 401) {
+    return `The file could not be stored: Bunny Storage refused the access (HTTP 401). Check STORAGE_KEY (the storage zone's password from FTP & API Access, not the read-only password) and STORAGE_REGION_HOST (it must be the hostname shown on that page, for example sg.storage.bunnycdn.com; now ${config.host}).`;
+  }
+  if (status === 404) return `The file could not be stored: Bunny Storage has no zone called "${config.zone}" at ${config.host} (HTTP 404). Check STORAGE_ZONE and STORAGE_REGION_HOST.`;
+  return `The file could not be stored: Bunny Storage answered HTTP ${status}. Please try again.`;
 }
 
 // POST /api/files?kind=image|file

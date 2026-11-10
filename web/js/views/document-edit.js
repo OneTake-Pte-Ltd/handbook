@@ -210,19 +210,66 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   let again = false;
   let timer = null;
   let editor = null;
+  let conflict = false;
 
   // Save status
   const status = h("span", { class: "save-status", role: "status", "aria-live": "polite" }, draft ? `Draft saved ${relativeTime(draft.updated_at)}` : "No changes yet");
   const setStatus = (text) => (status.textContent = text);
+  const resolveButton = h("button", { class: "button button--danger", type: "button", hidden: true, onclick: () => resolveConflict() }, "Resolve");
 
   function sync() {
     if (editor) snapshot.steps[index].content_json = editor.getJSON();
   }
   function changed() {
     dirty = true;
-    setStatus("Unsaved changes");
     clearTimeout(timer);
+    if (conflict) return; // waiting for the user to choose which version to keep
+    setStatus("Unsaved changes");
     timer = setTimeout(save, SAVE_DELAY);
+  }
+
+  // Someone else saved, published or discarded the draft while this person
+  // was editing. Their own changes stay in the editor until they choose.
+  function resolveConflict() {
+    const keep = h("button", { class: "button button--primary", type: "button" }, "Keep my version");
+    const theirs = h("button", { class: "button", type: "button" }, "Load the latest version");
+    const dialog = openDialog({
+      title: "Someone else changed this draft",
+      content: [
+        h("p", { style: "margin-top:0" }, "Another editor saved, published or discarded this draft while you were editing. Your changes are still here and are not saved yet."),
+        h("ul", { class: "small" }, h("li", {}, h("strong", {}, "Keep my version: "), "save your version over theirs. Their changes since you opened the draft are replaced."), h("li", {}, h("strong", {}, "Load the latest version: "), "see their version. Your unsaved changes are lost.")),
+        h("div", { class: "dialog__footer" }, theirs, keep),
+      ],
+    });
+    keep.addEventListener("click", () =>
+      busy(keep, async () => {
+        try {
+          const latest = await api("GET", `/documents/${doc.id}/draft`);
+          if (latest.draft && latest.draft.status === "submitted") {
+            toast("The draft is now waiting for review, so it can't be changed. Copy your text before loading the latest version.", { kind: "error", duration: 8000 });
+            return;
+          }
+          updatedAt = latest.draft ? latest.draft.updated_at : null;
+          // Steps that were published in the meantime may have new ids; keep ours as new.
+          const known = new Set((latest.draft ? latest.draft.snapshot.steps : latest.snapshot.steps).map((st) => st.id).filter(Boolean));
+          for (const st of snapshot.steps) if (st.id && !known.has(st.id)) st.id = null;
+          conflict = false;
+          resolveButton.hidden = true;
+          dialog.close();
+          dirty = true;
+          await save();
+          if (!conflict) toast("Your version is saved.");
+        } catch (err) {
+          toast(err.message, { kind: "error" });
+        }
+      }),
+    );
+    theirs.addEventListener("click", () => {
+      dirty = false;
+      conflict = false;
+      dialog.close();
+      rerender();
+    });
   }
   async function save() {
     clearTimeout(timer);
@@ -243,9 +290,13 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
       if (result.created) contentChanged();
     } catch (e) {
       if (e.code === "draft_conflict") {
-        toast(e.message, { kind: "error", duration: 6000 });
+        // Never throw away the user's work: keep it and let them choose.
         saving = false;
-        rerender();
+        dirty = true;
+        conflict = true;
+        setStatus("Not saved: someone else saved this draft");
+        resolveButton.hidden = false;
+        resolveConflict();
         return;
       }
       dirty = true;
@@ -259,6 +310,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   }
   async function flush() {
     clearTimeout(timer);
+    if (conflict) throw new Error("Resolve the conflict with the other editor first.");
     while (saving) await new Promise((r) => setTimeout(r, 100));
     if (dirty) await save();
   }
@@ -269,7 +321,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   window.addEventListener(
     "hashchange",
     () => {
-      flush();
+      flush().catch(() => {});
       window.removeEventListener("beforeunload", beforeUnload);
       if (editor) setTimeout(() => editor.destroy(), 0);
     },
@@ -395,7 +447,11 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   }
 
   async function publishDialog() {
-    await flush();
+    try {
+      await flush();
+    } catch (e) {
+      return toast(e.message, { kind: "error" });
+    }
     const firstTime = !doc.is_published && !data.document.published_at;
     const choice = revisionChoice();
     const ok = h("button", { class: "button button--primary", type: "submit" }, "Publish");
@@ -425,7 +481,11 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   }
 
   async function submitDialog() {
-    await flush();
+    try {
+      await flush();
+    } catch (e) {
+      return toast(e.message, { kind: "error" });
+    }
     if (!draft) return toast("There are no changes to submit yet.", { kind: "error" });
     const choice = revisionChoice();
     const note = h("textarea", { class: "input", rows: 3, maxlength: 2000 });
@@ -501,7 +561,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
       h("div", { class: "doc-header__meta" }, h("span", {}, "In category ", h("strong", {}, `${category.emoji ? `${category.emoji} ` : ""}${category.name}`))),
     ),
     banners.length ? h("div", { class: "form", style: "margin-bottom:16px" }, banners) : null,
-    h("div", { class: "edit-bar", role: "toolbar", "aria-label": "Document editing" }, h("strong", { class: "small" }, draft ? "Draft" : "Edit mode"), status, h("span", { class: "edit-bar__spacer" }), actions, more.length ? popupMenu(more, { label: "More document actions", className: "icon-button" }) : null),
+    h("div", { class: "edit-bar", role: "toolbar", "aria-label": "Document editing" }, h("strong", { class: "small" }, draft ? "Draft" : "Edit mode"), status, resolveButton, h("span", { class: "edit-bar__spacer" }), actions, more.length ? popupMenu(more, { label: "More document actions", className: "icon-button" }) : null),
     h(
       "div",
       { class: "doc-layout" },

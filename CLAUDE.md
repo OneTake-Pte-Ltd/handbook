@@ -57,6 +57,9 @@ Delete `dev/local.db` and `dev/uploads/` (with the dev server stopped) to start 
 - Titles are Bleached Cedar with a Golden Grass accent bar; completion checks are a Golden Grass circle with a Bleached Cedar tick (Golden Grass on white fails contrast for text).
 - Reordering uses pointer events (mouse and touch) plus Move up / Move down for keyboards.
 - The Documents tree in the sidebar only shows in the Knowledge section.
+- **Search:** `steps_fts` holds published steps only. Queries quote every word and add prefix matching to the last one (`ftsQuery` in `edge/src/lib/search.js`); results are filtered with the permission map; snippets mark matches with the characters U+0001 and U+0002, which the browser turns into `<mark>` elements (never HTML). Settings has "Rebuild search index".
+- **Edit conflicts:** if another editor saved, published or discarded the draft, the editor keeps the user's changes and asks whether to keep theirs or load the latest version; nothing is thrown away silently.
+- **Notifications** are in-app only; the bell refreshes its unread count every 60 seconds and on each navigation.
 - The interface and documents never use em dashes; use a semicolon. No horizontal rules in documents.
 
 ## Dependencies

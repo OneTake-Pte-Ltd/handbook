@@ -7,6 +7,8 @@ import { isAdmin, isLeader, session, workspaceLogo } from "./state.js";
 import { renderLogin } from "./views/login.js";
 import { renderForcedPasswordChange } from "./views/password.js";
 import { createSidebar } from "./sidebar.js";
+import { attachSearchBox } from "./search-box.js";
+import { createBell } from "./notifications.js";
 
 const root = document.getElementById("app");
 
@@ -30,12 +32,7 @@ const ROUTES = [
     load: () => import("./views/placeholder.js"),
     params: { title: "Reporting", text: "Reporting arrives in milestone 7." },
   },
-  {
-    path: /^\/search$/,
-    nav: "knowledge",
-    load: () => import("./views/placeholder.js"),
-    params: { title: "Search", text: "Search arrives in milestone 6." },
-  },
+  { path: /^\/search$/, nav: "knowledge", load: () => import("./views/search.js") },
 ];
 
 const NAV_ITEMS = [
@@ -84,19 +81,9 @@ function buildShell() {
     avatar(me.user),
   );
   const searchInput = h("input", { class: "input", type: "search", name: "q", placeholder: "Search the handbook", "aria-label": "Search the handbook", autocomplete: "off" });
-  const searchForm = h(
-    "form",
-    {
-      class: "topbar__search search-field",
-      role: "search",
-      onsubmit: (event) => {
-        event.preventDefault();
-        location.hash = `#/search?q=${encodeURIComponent(searchInput.value.trim())}`;
-      },
-    },
-    icon("search"),
-    searchInput,
-  );
+  const searchForm = h("form", { class: "topbar__search search-field", role: "search" }, icon("search"), searchInput);
+  attachSearchBox(searchForm, searchInput);
+  const bell = createBell();
   const logoImg = h("img", { src: workspaceLogo(me.workspace), alt: "" });
   const logoName = h("span", { class: "topbar__logo-name" }, me.workspace.name);
 
@@ -111,6 +98,7 @@ function buildShell() {
       "div",
       { class: "topbar__actions" },
       h("a", { class: "icon-button topbar__search-button", href: "#/search", "aria-label": "Search" }, icon("search")),
+      bell.el,
       h("div", { class: "menu-wrap" }, avatarButton, avatarMenu),
     ),
   );
@@ -175,8 +163,10 @@ function buildShell() {
   return {
     main,
     tree,
+    bell,
     destroy() {
       listeners.abort();
+      bell.destroy();
     },
     setSection(section) {
       body.dataset.section = section;
@@ -212,6 +202,8 @@ async function route() {
   const path = currentPath();
   const match = ROUTES.find((r) => r.path.test(path));
   shell.closeMenus();
+  shell.bell.close();
+  shell.bell.refresh();
   const main = shell.main;
   const ticket = ++renderCount;
 
