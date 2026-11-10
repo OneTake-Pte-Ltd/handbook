@@ -125,7 +125,18 @@ The **Publish frontend** workflow publishes `web/` to GitHub Pages on every chan
 
 ### Password hashing cost
 
-The iteration count is `PBKDF2_ITERATIONS` in `edge/src/lib/crypto.js`, currently 600,000. It is being measured on Bunny with the temporary `POST /api/bench` endpoint; this section will record the result.
+The iteration count is `PBKDF2_ITERATIONS` in `edge/src/lib/crypto.js`: **1,000,000**.
+
+Measured on Bunny Edge Scripting in November 2026:
+
+| Iterations | Time per hash |
+|---|---|
+| 100,000 | 24 ms |
+| 300,000 | 60 ms |
+| 600,000 | 115 ms |
+| 1,000,000 | 201 ms |
+
+1,000,000 is above the OWASP recommendation for PBKDF2-SHA-256 (600,000), adds about 0.2 seconds to each login, and stays far below the 30-second CPU limit per request. Each user row stores its own count, so raising it later only applies to new passwords and password changes.
 
 ## Licence
 

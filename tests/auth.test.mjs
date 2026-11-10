@@ -226,3 +226,16 @@ test("unknown routes return 404 and wrong methods 405", async () => {
   assert.equal((await t.call("GET", "/api/nothing")).status, 404);
   assert.equal((await t.call("DELETE", "/api/info")).status, 405);
 });
+
+test("logging in upgrades a password hashed with fewer iterations", async () => {
+  const t = createTestApp();
+  await setupAdmin(t);
+  const { hashPassword, PBKDF2_ITERATIONS } = await import("../edge/src/lib/crypto.js");
+  const old = await hashPassword(ADMIN.password, 1000);
+  await t.db.run("UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?", old.hash, old.salt, old.iterations);
+  const login = await t.call("POST", "/api/login", { body: { email: ADMIN.email, password: ADMIN.password } });
+  assert.equal(login.status, 200);
+  assert.equal(await t.db.value("SELECT password_iterations FROM users"), PBKDF2_ITERATIONS);
+  const again = await t.call("POST", "/api/login", { body: { email: ADMIN.email, password: ADMIN.password } });
+  assert.equal(again.status, 200);
+});
