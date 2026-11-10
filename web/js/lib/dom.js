@@ -136,3 +136,70 @@ export function avatar(user, size = "") {
 export function setTitle(...parts) {
   document.title = [...parts.filter(Boolean), "Handbook"].join(" · ");
 }
+
+// Modal dialog built on <dialog>, which traps focus and closes on Escape.
+// Returns { dialog, body, close }. The dialog removes itself when closed.
+export function openDialog({ title, content, onClose }) {
+  const titleId = `dlg-${Math.random().toString(36).slice(2, 9)}`;
+  const body = h("div", { class: "dialog__body" });
+  const dialog = h(
+    "dialog",
+    { class: "dialog", "aria-labelledby": titleId },
+    h(
+      "div",
+      { class: "dialog__header" },
+      h("h2", { class: "dialog__title", id: titleId }, title),
+      h("button", { class: "icon-button", type: "button", "aria-label": "Close", onclick: () => dialog.close() }, icon("close")),
+    ),
+    body,
+  );
+  if (content) append(body, [content]);
+  const opener = document.activeElement;
+  dialog.addEventListener("close", () => {
+    dialog.remove();
+    if (opener && opener.isConnected) opener.focus();
+    if (onClose) onClose(dialog.returnValue);
+  });
+  document.body.append(dialog);
+  dialog.showModal();
+  return { dialog, body, close: (value) => dialog.close(value) };
+}
+
+// Asks for confirmation. Resolves to true or false.
+export function confirmDialog({ title, text, confirmLabel = "Confirm", danger = false }) {
+  return new Promise((resolve) => {
+    let confirmed = false;
+    const cancel = h("button", { class: "button", type: "button" }, "Cancel");
+    const ok = h("button", { class: `button ${danger ? "button--danger" : "button--primary"}`, type: "button" }, confirmLabel);
+    const { close } = openDialog({
+      title,
+      content: [h("p", { style: "margin:0" }, text), h("div", { class: "dialog__footer" }, cancel, ok)],
+      onClose: () => resolve(confirmed),
+    });
+    cancel.addEventListener("click", () => close());
+    ok.addEventListener("click", () => {
+      confirmed = true;
+      close();
+    });
+    cancel.focus();
+  });
+}
+
+export async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Copied.");
+  } catch {
+    toast("Copy didn't work here. Select the text and copy it by hand.", { kind: "error" });
+  }
+}
+
+export function copyButton(getText, label = "Copy") {
+  return h("button", { class: "button", type: "button", onclick: () => copyText(getText()) }, icon("copy"), label);
+}
+
+export function switchInput({ checked, label, onchange, disabled }) {
+  const box = h("input", { type: "checkbox", role: "switch", checked: Boolean(checked), disabled: Boolean(disabled) });
+  if (onchange) box.addEventListener("change", () => onchange(box.checked, box));
+  return h("label", { class: "switch" }, box, h("span", {}, label));
+}

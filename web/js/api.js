@@ -134,3 +134,30 @@ export async function api(method, path, body) {
     throw error;
   }
 }
+
+// Uploads a file (Blob) as the raw request body. kind: "image" or "file".
+export async function uploadFile(blob, name, kind = "image") {
+  const base = currentWorkspace();
+  let response;
+  try {
+    response = await fetch(`${base}/api/files?kind=${kind}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${getToken(base)}`,
+        "Content-Type": blob.type || "application/octet-stream",
+        "X-File-Name": encodeURIComponent(name),
+      },
+      body: blob,
+    });
+  } catch {
+    throw new ApiError(0, "The upload failed. Check your connection and try again.");
+  }
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new ApiError(response.status, (data && data.error) || `The upload failed (${response.status}).`);
+  return data;
+}
+
+// The link to share with new members: this site, with the workspace pre-filled.
+export function loginLink() {
+  return `${location.origin}${location.pathname}?workspace=${encodeURIComponent(currentWorkspace())}`;
+}

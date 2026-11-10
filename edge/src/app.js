@@ -2,7 +2,7 @@
 // createApp() takes its database and environment as arguments, so the same
 // code runs on Bunny (see main.js) and in the Node tests.
 
-import { HttpError, corsHeaders, errorResponse, forbidden, json, notFound, parseAllowedOrigins, readJson, withHeaders } from "./lib/http.js";
+import { HttpError, corsHeaders, errorResponse, json, notFound, parseAllowedOrigins, readJson, withHeaders } from "./lib/http.js";
 import { migrate } from "./lib/migrations.js";
 import {
   authenticate,
@@ -14,18 +14,30 @@ import {
   handleSetup,
 } from "./lib/auth.js";
 import { getSettings, parseSettingsPatch, setSettings, settingsForAdmin } from "./lib/settings.js";
-
-function requireAdmin(user) {
-  if (!user.is_admin) throw forbidden("Only admins can do this.");
-}
+import {
+  handleCreateDepartment,
+  handleCreateUser,
+  handleDeleteDepartment,
+  handleGetDepartment,
+  handleGetUser,
+  handleListDepartments,
+  handleListUsers,
+  handlePutMember,
+  handleRemoveMember,
+  handleResetPassword,
+  handleUpdateDepartment,
+  handleUpdateUser,
+  requireAdmin,
+} from "./lib/people.js";
+import { handleUpload } from "./lib/storage.js";
 
 async function handleGetSettings({ db, user }) {
-  requireAdmin(user);
+  requireAdmin({ user });
   return json(settingsForAdmin(await getSettings(db)));
 }
 
 async function handlePatchSettings({ db, user, request }) {
-  requireAdmin(user);
+  requireAdmin({ user });
   const changes = parseSettingsPatch(await readJson(request));
   await setSettings(db, changes);
   return json(settingsForAdmin(await getSettings(db)));
@@ -42,11 +54,24 @@ const ROUTES = [
   ["GET", "/api/me", handleMe, { allowPasswordChange: true }],
   ["GET", "/api/settings", handleGetSettings],
   ["PATCH", "/api/settings", handlePatchSettings],
+  ["GET", "/api/users", handleListUsers],
+  ["POST", "/api/users", handleCreateUser],
+  ["GET", "/api/users/:id", handleGetUser],
+  ["PATCH", "/api/users/:id", handleUpdateUser],
+  ["POST", "/api/users/:id/reset-password", handleResetPassword],
+  ["GET", "/api/departments", handleListDepartments],
+  ["POST", "/api/departments", handleCreateDepartment],
+  ["GET", "/api/departments/:id", handleGetDepartment],
+  ["PATCH", "/api/departments/:id", handleUpdateDepartment],
+  ["DELETE", "/api/departments/:id", handleDeleteDepartment],
+  ["PUT", "/api/departments/:id/members/:userId", handlePutMember],
+  ["DELETE", "/api/departments/:id/members/:userId", handleRemoveMember],
+  ["POST", "/api/files", handleUpload],
 ].map(([method, pattern, handler, options = {}]) => ({
   method,
   handler,
   options,
-  regex: new RegExp("^" + pattern.replace(/:(\w+)/g, "(?<$1>[^/]+)") + "/?$"),
+  regex: new RegExp("^" + pattern.replace(/:(\w+)/g, "(?<$1>\\d+)") + "/?$"),
 }));
 
 function matchRoute(method, pathname) {
@@ -61,7 +86,7 @@ function matchRoute(method, pathname) {
   throw notFound("This API endpoint does not exist.");
 }
 
-export function createApp({ db, env }) {
+export function createApp({ db, env, fetchImpl = (...args) => fetch(...args) }) {
   const allowedOrigins = parseAllowedOrigins(env.ALLOWED_ORIGINS);
   let migrated = null;
 
@@ -95,7 +120,7 @@ export function createApp({ db, env }) {
 
     const { route, params } = matchRoute(request.method, url.pathname);
     await ensureMigrated();
-    const ctx = { db, env, request, url, params, origin, user: null };
+    const ctx = { db, env, request, url, params, origin, fetchImpl, user: null };
     if (!route.options.public) {
       ctx.user = await authenticate(db, request);
       if (ctx.user.must_change_password && !route.options.allowPasswordChange) {

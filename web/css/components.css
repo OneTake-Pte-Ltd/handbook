@@ -723,3 +723,359 @@ a {
     transform: rotate(360deg);
   }
 }
+
+/* Section layout with a sub-menu (Organization) */
+
+.section-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-5);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.subnav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-self: start;
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-5));
+}
+
+.subnav .nav-link {
+  width: auto;
+  justify-content: flex-start;
+  padding: 0 var(--space-3);
+}
+
+@media (max-width: 1023px) {
+  .section-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .subnav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.page-header .page-title {
+  margin: 0;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back-link svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Filters above a list */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.filters .search-field {
+  flex: 1 1 240px;
+}
+
+.select {
+  min-height: var(--touch);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+/* Tables. Below 640px each row becomes a card. */
+
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.table th {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tr[data-href] {
+  cursor: pointer;
+}
+
+.table tr[data-href]:hover td {
+  background: var(--accent-softer);
+}
+
+.table .numeric {
+  text-align: right;
+}
+
+.table .actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.person a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.person a:hover {
+  text-decoration: underline;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+@media (max-width: 639px) {
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .table tr {
+    display: block;
+    padding: var(--space-3) var(--space-4);
+    border-top: 1px solid var(--border);
+  }
+
+  .table tr:first-child {
+    border-top: 0;
+  }
+
+  .table td {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-1) 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .table td[data-label]::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .table td:first-child {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .table .actions {
+    justify-content: flex-end;
+  }
+}
+
+/* Dialogs */
+
+.dialog {
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 32px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+}
+
+.dialog::backdrop {
+  background: rgba(36, 24, 38, 0.45);
+}
+
+.dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.dialog__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.dialog__body {
+  padding: var(--space-5);
+}
+
+.dialog__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+/* Checkbox rows */
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin: 0;
+  padding: 0;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.check-row:first-child {
+  border-top: 0;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch);
+  cursor: pointer;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--bleached-cedar);
+}
+
+fieldset.field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+fieldset.field legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+}
+
+/* Rows inside a card (departments of a member, etc.) */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0 calc(var(--space-5) * -1);
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.row__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-end;
+  margin-top: var(--space-4);
+}
+
+.inline-form .field {
+  flex: 1 1 220px;
+}
+
+.profile-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.profile-head__name {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.danger-zone {
+  border-color: var(--cabaret-50);
+}
