@@ -1879,3 +1879,107 @@ mark {
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
+
+/* Reporting */
+
+.sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sort-button:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.sort-arrow {
+  font-size: 10px;
+}
+
+.table th.numeric .sort-button {
+  justify-content: flex-end;
+}
+
+.rate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.rate__bar {
+  display: inline-block;
+  width: 80px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gold-100);
+  overflow: hidden;
+}
+
+.rate__fill {
+  display: block;
+  height: 100%;
+  background: var(--golden-grass);
+}
+
+.rate__value {
+  min-width: 3.5ch;
+  font-weight: 600;
+  text-align: right;
+}
+
+.report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.report-summary .card + .card {
+  margin-top: 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat__value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stat__label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.status-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-select {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 899px) {
+  .sort-select {
+    display: flex;
+  }
+}

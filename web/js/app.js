@@ -29,8 +29,7 @@ const ROUTES = [
     path: /^\/reporting(?:\/.*)?$/,
     nav: "reporting",
     allowed: () => isAdmin() || isLeader(),
-    load: () => import("./views/placeholder.js"),
-    params: { title: "Reporting", text: "Reporting arrives in milestone 7." },
+    load: () => import("./views/reporting.js"),
   },
   { path: /^\/search$/, nav: "knowledge", load: () => import("./views/search.js") },
 ];

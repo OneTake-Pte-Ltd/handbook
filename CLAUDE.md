@@ -59,6 +59,7 @@ Delete `dev/local.db` and `dev/uploads/` (with the dev server stopped) to start 
 - The Documents tree in the sidebar only shows in the Knowledge section.
 - **Search:** `steps_fts` holds published steps only. Queries quote every word and add prefix matching to the last one (`ftsQuery` in `edge/src/lib/search.js`); results are filtered with the permission map; snippets mark matches with the characters U+0001 and U+0002, which the browser turns into `<mark>` elements (never HTML). Settings has "Rebuild search index".
 - **Edit conflicts:** if another editor saved, published or discarded the draft, the editor keeps the user's changes and asks whether to keep theirs or load the latest version; nothing is thrown away silently.
+- **Reporting** (`edge/src/lib/reports.js`): admins see every active member; team leaders only members of departments they lead. A mandatory document is completed, in progress, needs re-reading (only completions from before the last major revision) or not started. Last activity is the latest step view, completion or login. A member's viewing history only lists documents the viewer can see.
 - **Notifications** are in-app only; the bell refreshes its unread count every 60 seconds and on each navigation.
 - The interface and documents never use em dashes; use a semicolon. No horizontal rules in documents.
 
