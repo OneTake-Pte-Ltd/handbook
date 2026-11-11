@@ -170,8 +170,9 @@ export async function handleGetUser(ctx) {
   const leadsOne = departments.some((d) => access.leads.has(d.id));
   if (!access.isAdmin && !self && !leadsOne) throw forbidden("You can't see this member.");
   const manageable = await canManageMember(ctx, target);
+  const completion = (await completionRates(ctx.db, [target])).get(target.id);
   return json({
-    user: memberSummary(target, departments),
+    user: { ...memberSummary(target, departments), completion },
     permissions: {
       can_edit_details: manageable,
       can_edit_email: access.isAdmin,

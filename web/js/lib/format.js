@@ -59,3 +59,9 @@ export function fileSize(bytes) {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+// "Nov 11, 2026, 3:17 PM" in the viewer's time zone.
+export function shortDateTime(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}

@@ -108,7 +108,7 @@ export async function renderMembersList(container) {
           h("td", {}, h("div", { class: "person" }, avatar(u), h("div", {}, h("a", { href: `#/organization/members/${u.id}` }, fullName(u)), h("div", { class: "muted small" }, u.email)))),
           h("td", { "data-label": "Role" }, u.role_title || ""),
           h("td", { "data-label": "Departments" }, departmentTags(u.departments)),
-          h("td", { class: "progress-cell", "data-label": "Completion" }, completionText(u.completion)),
+          h("td", { class: "progress-cell", "data-label": "Completion" }, u.completion && u.completion.total ? h("a", { href: `#/reporting/users/${u.id}` }, completionText(u.completion)) : completionText(u.completion)),
           h("td", { class: "nowrap", "data-label": "Last login" }, u.last_login_at ? relativeTime(u.last_login_at) : "Never"),
           h("td", { "data-label": "Status" }, h("div", { class: "tags" }, statusBadges(u), u.is_active && !u.is_admin ? "Active" : null)),
         ),
@@ -302,6 +302,19 @@ export async function renderMemberPage(container, id) {
         : null,
     ),
   );
+
+  // Progress, with a link to the full report.
+  if (user.is_active && (isAdmin() || permissions.can_edit_details) && !(self && !isAdmin())) {
+    container.append(
+      h(
+        "section",
+        { class: "card", "aria-labelledby": "progress-title" },
+        h("h2", { class: "section-title", id: "progress-title" }, "Progress"),
+        h("p", { style: "margin:0 0 12px" }, user.completion ? completionText(user.completion) : "See the report for this member's required documents."),
+        h("a", { class: "button", href: `#/reporting/users/${user.id}` }, "View the report"),
+      ),
+    );
+  }
 
   // Access: user-level grants, with the effective access and its source.
   if (user.is_active && (isAdmin() || permissions.can_edit_details) && !(self && !isAdmin())) {

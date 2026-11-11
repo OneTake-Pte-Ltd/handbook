@@ -52,6 +52,7 @@ import { handleDeleteGrant, handleListGrants, handlePutGrant } from "./lib/grant
 import { handleImport } from "./lib/import.js";
 import { handleEmbedPreview } from "./lib/embeds.js";
 import { handleHome, handleNotifications, handleReadNotifications, handleRebuildSearch, handleSearch } from "./lib/home.js";
+import { handleReportDocument, handleReportOverview, handleReportUser } from "./lib/reports.js";
 import {
   handleApproveDraft,
   handleDiscardDraft,
@@ -104,6 +105,9 @@ const ROUTES = [
   ["GET", "/api/home", handleHome],
   ["GET", "/api/notifications", handleNotifications],
   ["POST", "/api/notifications/read", handleReadNotifications],
+  ["GET", "/api/reports/overview", handleReportOverview],
+  ["GET", "/api/reports/users/:id", handleReportUser],
+  ["GET", "/api/reports/documents/:id", handleReportDocument],
   ["GET", "/api/tree", handleTree],
   ["POST", "/api/documents", handleCreateDocument],
   ["GET", "/api/documents/:id", handleGetDocument],

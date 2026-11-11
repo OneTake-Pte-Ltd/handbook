@@ -356,6 +356,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   const more = [];
   if (draft) more.push({ label: "Discard draft", danger: true, onClick: discard });
   if (isAdmin() || isLeader()) more.push({ label: "Access", onClick: () => openAccessPanel({ type: "document", id: doc.id, name: snapshot.title }) });
+  if (isAdmin() || isLeader()) more.push({ label: "Reading report", onClick: () => (location.hash = `#/reporting/documents/${doc.id}`) });
   if (permissions.level === "edit_publish" && doc.is_published) more.push({ label: "Unpublish", onClick: unpublish });
   if (data.permissions.can_delete) more.push({ label: "Delete document", danger: true, onClick: deleteDocument });
 
