@@ -12,11 +12,14 @@ export const SETTING_DEFAULTS = {
   assistant_query_model: "claude-haiku-5-5",
 };
 
-export async function getSettings(db) {
-  const rows = await db.all("SELECT key, value FROM settings");
+export function settingsFromRows(rows) {
   const settings = { ...SETTING_DEFAULTS };
   for (const row of rows) if (row.key in SETTING_DEFAULTS) settings[row.key] = row.value;
   return settings;
+}
+
+export async function getSettings(db) {
+  return settingsFromRows(await db.all("SELECT key, value FROM settings"));
 }
 
 // What admins see in Settings: everything except the API key itself.

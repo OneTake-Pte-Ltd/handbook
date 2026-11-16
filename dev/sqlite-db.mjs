@@ -34,6 +34,12 @@ export function createSqliteDb(path) {
       const result = stmt.run(...values);
       return { rowsAffected: Number(result.changes), lastInsertRowid: Number(result.lastInsertRowid) };
     },
+    async many(statements) {
+      return statements.map(([sql, args = []]) => {
+        const [stmt, values] = prepare(sql, args);
+        return stmt.all(...values).map(plain);
+      });
+    },
     // Like Bunny's batch: every statement in one transaction.
     async batch(statements, { foreignKeys = true } = {}) {
       if (!foreignKeys) sqlite.exec("PRAGMA foreign_keys = OFF");

@@ -6,7 +6,8 @@
 // its public pull-zone URL. Files are public but unguessable.
 
 import { nowIso } from "./db.js";
-import { HttpError, badRequest, forbidden, json } from "./http.js";
+import { HttpError, badRequest, forbidden, json, readJson } from "./http.js";
+import { fetchLimited, isPublicHttpUrl } from "./embeds.js";
 import { accessFor } from "./permissions.js";
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -139,6 +140,11 @@ export async function handleUpload(ctx) {
     mime = "application/octet-stream";
   }
 
+  return json(await storeFile(ctx, { bytes, name, originalName, mime }), 201);
+}
+
+// Stores bytes in the storage zone and records them in `files`.
+async function storeFile({ db, env, user, fetchImpl }, { bytes, name, originalName, mime }) {
   const now = new Date();
   const path = `uploads/${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}-${name}`;
   const publicUrl = await putFile(env, path, bytes, mime, fetchImpl);
@@ -153,5 +159,31 @@ export async function handleUpload(ctx) {
     user.id,
     nowIso(),
   );
-  return json({ id: result.lastInsertRowid, url: publicUrl, name: originalName, mime_type: mime, size_bytes: bytes.length }, 201);
+  return { id: result.lastInsertRowid, url: publicUrl, name: originalName, mime_type: mime, size_bytes: bytes.length };
+}
+
+// POST /api/files/import-url { url }
+// Copies an image from another website into the storage zone, so documents
+// never depend on outside images (used when content with images is pasted).
+// Same safety rules as embed previews: public addresses only, checked again
+// on every redirect; 10 MB at most; only JPEG, PNG, GIF and WebP.
+export async function handleImportImage(ctx) {
+  if (!(await accessFor(ctx)).canEditAnything) throw forbidden("Only editors can copy images.");
+  storageConfig(ctx.env);
+  const body = await readJson(ctx.request);
+  const source = typeof body.url === "string" ? body.url.trim() : "";
+  if (!isPublicHttpUrl(source)) throw badRequest("This image address can't be copied.");
+  const { bytes, truncated, url } = await fetchLimited(ctx.fetchImpl || fetch, source, { accept: "image/*", maxBytes: MAX_IMAGE_BYTES, userAgent: "HandbookImageImport/1.0" });
+  if (truncated) throw new HttpError(413, `This image is too large (${MAX_IMAGE_BYTES / 1024 / 1024} MB maximum).`);
+  if (!bytes.length) throw badRequest("This image is empty.");
+  const image = detectImage(bytes);
+  if (!image) throw badRequest("This address isn't a JPEG, PNG, GIF or WebP image.");
+  let originalName = "image";
+  try {
+    originalName = decodeURIComponent(new URL(url).pathname.split("/").pop() || "image").slice(0, 200) || "image";
+  } catch {
+    originalName = "image";
+  }
+  const name = `${safeFileName(originalName).replace(/\.[A-Za-z0-9]+$/, "")}.${image.ext}`;
+  return json(await storeFile(ctx, { bytes, name, originalName, mime: image.mime }), 201);
 }

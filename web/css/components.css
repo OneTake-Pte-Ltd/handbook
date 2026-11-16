@@ -1324,18 +1324,31 @@ fieldset.field legend {
 }
 
 .doc-layout {
+  position: relative;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: var(--steps-width, 280px) minmax(0, 1fr);
   gap: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  /* clip, not hidden: hidden would stop the step list and the editor toolbar
+     from staying in view while scrolling. */
+  overflow: clip;
 }
 
 .step-list {
+  position: sticky;
+  top: var(--topbar-height);
+  align-self: start;
+  max-height: calc(100vh - var(--topbar-height));
+  overflow-y: auto;
+  margin-right: -1px;
   border-right: 1px solid var(--border);
   background: var(--surface);
+}
+
+.step-content {
+  border-left: 1px solid var(--border);
 }
 
 .step-list ol {
@@ -1443,7 +1456,15 @@ fieldset.field legend {
   }
 
   .step-list {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    margin-right: 0;
     border-right: 0;
+  }
+
+  .step-content {
+    border-left: 0;
   }
 
   .step-select {
@@ -1981,5 +2002,78 @@ mark {
 @media (max-width: 899px) {
   .sort-select {
     display: flex;
+  }
+}
+
+.step-actions__forward {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.step-actions__next-doc {
+  display: contents;
+}
+
+/* Column resizing (sidebar and list of steps), desktop only */
+
+.resize-handle {
+  flex-shrink: 0;
+  z-index: 10;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.resize-handle::after {
+  content: "";
+  display: block;
+  width: 3px;
+  height: 100%;
+  margin: 0 auto;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.resize-handle:hover::after,
+.resize-handle:focus-visible::after,
+.is-resizing .resize-handle::after {
+  background: var(--accent);
+}
+
+.resize-handle:focus-visible {
+  outline: none;
+}
+
+.resize-handle--sidebar {
+  position: sticky;
+  top: var(--topbar-height);
+  height: calc(100vh - var(--topbar-height));
+  margin: 0 -4px 0 -5px;
+}
+
+.resize-handle--steps {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--steps-width, 280px) - 5px);
+}
+
+.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+@media (max-width: 1023px) {
+  .resize-handle--sidebar {
+    display: none;
+  }
+}
+
+@media (max-width: 639px) {
+  .resize-handle--steps {
+    display: none;
   }
 }

@@ -8,9 +8,9 @@ import { api } from "../api.js";
 import { alertBox, busy, clear, confirmDialog, field, h, icon, input, openDialog, popupMenu, setTitle, toast } from "../lib/dom.js";
 import { relativeTime } from "../lib/format.js";
 import { moveItem, sortable } from "../lib/sortable.js";
-import { contentChanged, isAdmin, isLeader } from "../state.js";
+import { contentChanged, isAdmin, isLeader, session, setEditMode } from "../state.js";
 import { openAccessPanel } from "./access.js";
-import { documentHeader } from "./document.js";
+import { documentHeader, stepsResizeHandle } from "./document.js";
 
 const SAVE_DELAY = 1500;
 const emptyDoc = () => ({ type: "doc", content: [{ type: "paragraph" }] });
@@ -105,6 +105,7 @@ async function readOnlySteps(container, { snapshot, startIndex, flags, removed =
     h(
       "div",
       { class: "doc-layout" },
+      stepsResizeHandle(),
       h("nav", { class: "step-list", "aria-label": "Steps" }, h("div", { class: "step-select" }, select), list),
       h("article", { class: "step-content" }, h("div", { class: "step-content__header" }, title, tag), body),
     ),
@@ -112,11 +113,16 @@ async function readOnlySteps(container, { snapshot, startIndex, flags, removed =
   show(Math.min(startIndex, all.length - 1));
 }
 
+// Leaves Edit mode from the document itself (the sidebar switch is easy to miss).
+function stopEditingButton() {
+  return h("button", { class: "button", type: "button", onclick: () => setEditMode(false) }, "Stop editing");
+}
+
 function renderWaiting(main, { data, state, snapshot, startIndex }) {
   const page = h(
     "div",
     { class: "page page--document" },
-    documentHeader({ title: snapshot.title, description: snapshot.description, category: data.category, badges: h("span", { class: "badge" }, "In review") }),
+    documentHeader({ title: snapshot.title, description: snapshot.description, category: data.category, badges: h("div", { class: "doc-header__badges" }, h("span", { class: "badge" }, "In review"), stopEditingButton()) }),
     h(
       "div",
       { class: "alert alert--info", style: "margin-bottom:16px" },
@@ -179,7 +185,7 @@ function renderReview(main, { data, state, snapshot, startIndex }) {
   const page = h(
     "div",
     { class: "page page--document" },
-    documentHeader({ title: snapshot.title, description: snapshot.description, category: data.category, badges: h("span", { class: "badge badge--accent" }, "Review") }),
+    documentHeader({ title: snapshot.title, description: snapshot.description, category: data.category, badges: h("div", { class: "doc-header__badges" }, h("span", { class: "badge badge--accent" }, "Review"), stopEditingButton()) }),
     h(
       "div",
       { class: "edit-bar", role: "toolbar", "aria-label": "Review" },
@@ -201,6 +207,7 @@ function renderReview(main, { data, state, snapshot, startIndex }) {
 async function renderEditing(main, { data, state, snapshot, startIndex, category, doc }) {
   const { createEditor } = await import("../editor/setup.js");
   const { createBubbleMenu, createToolbar } = await import("../editor/toolbar.js");
+  const { createImageImporter, uploadImageFiles } = await import("../editor/image-import.js");
   const permissions = state.permissions;
   let draft = state.draft;
   let updatedAt = draft ? draft.updated_at : null;
@@ -211,6 +218,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   let timer = null;
   let editor = null;
   let conflict = false;
+  let images = { scan() {}, busy: false, settle: async () => {} }; // pasted images still being copied
 
   // Save status
   const status = h("span", { class: "save-status", role: "status", "aria-live": "polite" }, draft ? `Draft saved ${relativeTime(draft.updated_at)}` : "No changes yet");
@@ -222,6 +230,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   }
   function changed() {
     dirty = true;
+    primaryAction.hidden = false;
     clearTimeout(timer);
     if (conflict) return; // waiting for the user to choose which version to keep
     setStatus("Unsaved changes");
@@ -278,6 +287,11 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
       return;
     }
     if (!dirty) return;
+    if (images.busy) {
+      // Never save a pasted image before its copy is in storage.
+      timer = setTimeout(save, SAVE_DELAY);
+      return;
+    }
     saving = true;
     dirty = false;
     sync();
@@ -311,19 +325,23 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   async function flush() {
     clearTimeout(timer);
     if (conflict) throw new Error("Resolve the conflict with the other editor first.");
+    await images.settle();
     while (saving) await new Promise((r) => setTimeout(r, 100));
     if (dirty) await save();
   }
   const beforeUnload = (e) => {
-    if (dirty || saving) e.preventDefault();
+    if (dirty || saving || images.busy) e.preventDefault();
   };
   window.addEventListener("beforeunload", beforeUnload);
   window.addEventListener(
     "hashchange",
     () => {
-      flush().catch(() => {});
       window.removeEventListener("beforeunload", beforeUnload);
-      if (editor) setTimeout(() => editor.destroy(), 0);
+      // The editor stays alive (off screen) until pasted images are copied
+      // and the last changes are saved.
+      flush()
+        .catch(() => {})
+        .finally(() => editor && editor.destroy());
     },
     { once: true },
   );
@@ -351,12 +369,18 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
 
   // Actions
   const actions = [];
-  if (permissions.can_publish) actions.push(h("button", { class: "button button--primary", type: "button", onclick: publishDialog }, doc.is_published ? "Publish changes" : "Publish"));
-  else actions.push(h("button", { class: "button button--primary", type: "button", onclick: submitDialog }, "Submit for review"));
+  // A published document without a draft has nothing to publish or submit:
+  // the button appears with the first change.
+  const primaryAction = permissions.can_publish
+    ? h("button", { class: "button button--primary", type: "button", onclick: publishDialog }, doc.is_published ? "Publish changes" : "Publish")
+    : h("button", { class: "button button--primary", type: "button", onclick: submitDialog }, "Submit for review");
+  primaryAction.hidden = Boolean(doc.is_published && !draft);
+  actions.push(primaryAction);
   const more = [];
   if (draft) more.push({ label: "Discard draft", danger: true, onClick: discard });
   if (isAdmin() || isLeader()) more.push({ label: "Access", onClick: () => openAccessPanel({ type: "document", id: doc.id, name: snapshot.title }) });
   if (isAdmin() || isLeader()) more.push({ label: "Reading report", onClick: () => (location.hash = `#/reporting/documents/${doc.id}`) });
+  if (permissions.level === "edit_publish") more.push({ label: "Move to another category", onClick: moveDocumentDialog });
   if (permissions.level === "edit_publish" && doc.is_published) more.push({ label: "Unpublish", onClick: unpublish });
   if (data.permissions.can_delete) more.push({ label: "Delete document", danger: true, onClick: deleteDocument });
 
@@ -388,6 +412,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
               { label: "Move up", disabled: !moveItem(keys, s.key, -1), onClick: () => reorder(moveItem(keys, s.key, -1)) },
               { label: "Move down", disabled: !moveItem(keys, s.key, 1), onClick: () => reorder(moveItem(keys, s.key, 1)) },
               { label: "Add a step after this one", onClick: () => addStep(i) },
+              { label: "Move to another document", disabled: snapshot.steps.length <= 1, onClick: () => moveStepDialog(i) },
               { label: "Delete step", danger: true, disabled: snapshot.steps.length <= 1, onClick: () => deleteStep(i) },
             ],
             { label: `Actions for step ${s.title}` },
@@ -524,6 +549,97 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
     }
   }
 
+  // The other documents this member can edit, or the categories they can
+  // create documents in, from the Edit mode tree, as <optgroup>s.
+  async function editTree() {
+    return session.tree && session.tree.edit_mode ? session.tree : api("GET", "/tree?mode=edit");
+  }
+
+  async function moveStepDialog(i) {
+    const step = snapshot.steps[i];
+    let tree;
+    try {
+      tree = await editTree();
+    } catch (e) {
+      return toast(e.message, { kind: "error" });
+    }
+    const groups = [];
+    for (const space of tree.spaces) {
+      for (const category of space.categories) {
+        const docs = category.documents.filter((d) => d.can_edit && d.id !== doc.id);
+        if (docs.length) groups.push(h("optgroup", { label: `${space.name} / ${category.name}` }, docs.map((d) => h("option", { value: String(d.id) }, d.title))));
+      }
+    }
+    if (!groups.length) return toast("There is no other document you can edit.", { kind: "error" });
+    const target = h("select", { class: "select", required: true }, groups);
+    const ok = h("button", { class: "button button--primary", type: "submit" }, "Move step");
+    const form = h(
+      "form",
+      { class: "form" },
+      h("p", { style: "margin-top:0" }, `"${step.title}" leaves this draft and is added at the end of the other document's draft. Readers see the change once both documents are published. Completions of this step don't carry over.`),
+      field({ label: "Move to", input: target }),
+      h("div", { class: "dialog__footer" }, ok),
+    );
+    const dialog = openDialog({ title: "Move to another document", content: form });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      busy(ok, async () => {
+        try {
+          await flush();
+          const result = await api("POST", `/documents/${doc.id}/draft/move-step`, { step_key: step.key, target_document_id: Number(target.value), base_updated_at: updatedAt });
+          dialog.close();
+          toast(`Moved to the draft of "${result.target.title}".`);
+          contentChanged();
+          history.replaceState(null, "", `#/doc/${doc.id}`);
+          rerender();
+        } catch (err) {
+          toast(err.message, { kind: "error" });
+        }
+      });
+    });
+  }
+
+  async function moveDocumentDialog() {
+    let tree;
+    try {
+      tree = await editTree();
+    } catch (e) {
+      return toast(e.message, { kind: "error" });
+    }
+    const groups = tree.spaces
+      .map((space) => {
+        const categories = space.categories.filter((c) => c.can_create && c.id !== category.id);
+        return categories.length ? h("optgroup", { label: space.name }, categories.map((c) => h("option", { value: String(c.id) }, `${c.emoji ? `${c.emoji} ` : ""}${c.name}`))) : null;
+      })
+      .filter(Boolean);
+    if (!groups.length) return toast("There is no other category you can add documents to.", { kind: "error" });
+    const target = h("select", { class: "select", required: true }, groups);
+    const ok = h("button", { class: "button button--primary", type: "submit" }, "Move document");
+    const form = h(
+      "form",
+      { class: "form" },
+      field({ label: "Move to", input: target }),
+      h("div", { class: "alert alert--info" }, "Who can see and edit this document may change: it follows the access of its new category, plus any access set on the document itself."),
+      h("div", { class: "dialog__footer" }, ok),
+    );
+    const dialog = openDialog({ title: "Move to another category", content: form });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      busy(ok, async () => {
+        try {
+          await flush();
+          await api("POST", `/documents/${doc.id}/move`, { category_id: Number(target.value) });
+          dialog.close();
+          toast("Document moved.");
+          contentChanged();
+          rerender();
+        } catch (err) {
+          toast(err.message, { kind: "error" });
+        }
+      });
+    });
+  }
+
   async function unpublish() {
     if (!(await confirmDialog({ title: "Unpublish", text: "Readers won't see this document until it is published again.", confirmLabel: "Unpublish" }))) return;
     try {
@@ -562,10 +678,11 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
       h("div", { class: "doc-header__meta" }, h("span", {}, "In category ", h("strong", {}, `${category.emoji ? `${category.emoji} ` : ""}${category.name}`))),
     ),
     banners.length ? h("div", { class: "form", style: "margin-bottom:16px" }, banners) : null,
-    h("div", { class: "edit-bar", role: "toolbar", "aria-label": "Document editing" }, h("strong", { class: "small" }, draft ? "Draft" : "Edit mode"), status, resolveButton, h("span", { class: "edit-bar__spacer" }), actions, more.length ? popupMenu(more, { label: "More document actions", className: "icon-button" }) : null),
+    h("div", { class: "edit-bar", role: "toolbar", "aria-label": "Document editing" }, h("strong", { class: "small" }, draft ? "Draft" : "Edit mode"), status, resolveButton, h("span", { class: "edit-bar__spacer" }), stopEditingButton(), actions, more.length ? popupMenu(more, { label: "More document actions", className: "icon-button" }) : null),
     h(
       "div",
       { class: "doc-layout" },
+      stepsResizeHandle(),
       h("nav", { class: "step-list", "aria-label": "Steps" }, h("div", { class: "step-select" }, stepSelect), stepList, h("div", { style: "padding:8px" }, h("button", { class: "tree__add", type: "button", onclick: () => addStep(snapshot.steps.length - 1) }, icon("plus"), "Add a step"))),
       h("div", { class: "step-content step-content--editing" }, h("label", { class: "visually-hidden", for: "step-title-input" }, "Step title"), stepTitle, editorArea),
     ),
@@ -577,8 +694,23 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
     element: editorHost,
     content: snapshot.steps[index].content_json || emptyDoc(),
     placeholder: "Write here, or paste from Google Docs or Notion. Use the toolbar to add tables, images, videos and more.",
-    onUpdate: () => changed(),
+    onUpdate: () => {
+      changed();
+      images.scan();
+    },
     onSelectionUpdate: () => toolbar.update(),
+    onImageFiles: (files, position) => {
+      toast("Uploading the image…", { duration: 2500 });
+      uploadImageFiles(editor, files, position).catch((e) => toast(e.message, { kind: "error", duration: 6000 }));
+    },
+  });
+  images = createImageImporter({
+    editor,
+    filesUrl: session.me.workspace.files_url,
+    otherSteps: () => snapshot.steps.filter((_, i) => i !== index).map((st) => st.content_json),
+    onChange: () => changed(),
+    onStatus: (text) => text && setStatus(text),
+    onError: (message) => toast(message, { kind: "error", duration: 10000 }),
   });
   const toolbar = createToolbar(editor);
   editorArea.prepend(toolbar.el);

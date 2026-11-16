@@ -30,7 +30,7 @@ function bunnyClient() {
   return client;
 }
 
-const db = fromBunnyClient(bunnyClient);
+const db = fromBunnyClient(bunnyClient, () => ({ url: process.env.BUNNY_DATABASE_URL, token: process.env.BUNNY_DATABASE_AUTH_TOKEN }));
 const app = createApp({ db, env: process.env });
 
 BunnySDK.net.http.serve((request) => app.handle(request));

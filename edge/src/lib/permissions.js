@@ -17,14 +17,16 @@ export const LEVEL_LABELS = { none: "None", view: "View", edit_review: "Edit wit
 export const rank = (level) => (level ? LEVELS.indexOf(level) : 0);
 export const atLeast = (level, minimum) => rank(level) >= rank(minimum);
 
-// Loads everything the resolution needs. Cache the result per request.
-export async function loadAccessData(db) {
-  const [documents, grants, memberships, system] = await Promise.all([
-    db.all("SELECT id, category_id, is_published FROM documents"),
-    db.all("SELECT * FROM grants"),
-    db.all("SELECT department_id, user_id, is_leader FROM department_members"),
-    db.value("SELECT id FROM departments WHERE is_system = 1"),
-  ]);
+// The queries behind the access data. They are also sent together with the
+// session check (auth.js), so most requests need a single round trip for both.
+export const ACCESS_QUERIES = [
+  ["SELECT id, category_id, is_published FROM documents", []],
+  ["SELECT * FROM grants", []],
+  ["SELECT department_id, user_id, is_leader FROM department_members", []],
+  ["SELECT id FROM departments WHERE is_system = 1", []],
+];
+
+export function accessDataFromRows([documents, grants, memberships, system]) {
   const grantIndex = new Map(); // "category:5|department:3" -> grant
   for (const g of grants) grantIndex.set(`${g.target_type}:${g.target_id}|${g.principal_type}:${g.principal_id}`, g);
   const departmentsByUser = new Map();
@@ -32,7 +34,20 @@ export async function loadAccessData(db) {
     if (!departmentsByUser.has(m.user_id)) departmentsByUser.set(m.user_id, []);
     departmentsByUser.get(m.user_id).push(m.department_id);
   }
-  return { documents, grants, grantIndex, departmentsByUser, systemDepartmentId: system };
+  return { documents, grants, grantIndex, memberships, departmentsByUser, systemDepartmentId: system[0] ? system[0].id : null };
+}
+
+// Loads everything the resolution needs, in one round trip. Use it after a
+// write in the same request; otherwise use requestAccessData(ctx).
+export async function loadAccessData(db) {
+  return accessDataFromRows(await db.many(ACCESS_QUERIES));
+}
+
+// The access data loaded with the session at the start of the request.
+// Returns a copy safe to modify.
+export async function requestAccessData(ctx) {
+  if (!ctx.accessData) ctx.accessData = await loadAccessData(ctx.db);
+  return { ...ctx.accessData, documents: [...ctx.accessData.documents] };
 }
 
 export function principalsOf(data, user) {

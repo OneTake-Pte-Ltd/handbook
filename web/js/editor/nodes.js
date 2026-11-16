@@ -95,6 +95,8 @@ export const Figure = Node.create({
         return { src: img ? img.getAttribute("src") : "", alt: img ? img.getAttribute("alt") || "" : "", caption: el.querySelector("figcaption")?.textContent || "", width: el.getAttribute("data-width") || "full" };
       },
     },
+    // Images in pasted content (they are then copied into storage).
+    { tag: "img[src]", getAttrs: (el) => ({ src: el.getAttribute("src") || "", alt: el.getAttribute("alt") || "", caption: "", width: "full" }) },
   ],
   renderHTML: ({ node }) => ["figure", { "data-figure": "", "data-width": node.attrs.width }, ["img", { src: node.attrs.src, alt: node.attrs.alt }], ["figcaption", {}, node.attrs.caption]],
   addNodeView() {
@@ -103,7 +105,9 @@ export const Figure = Node.create({
       const render = (n) => {
         dom.className = `figure figure--${n.attrs.width}`;
         dom.replaceChildren(
-          isFileUrl(n.attrs.src) ? h("img", { src: n.attrs.src, alt: n.attrs.alt, loading: "lazy" }) : h("div", { class: "muted small" }, "Image not available"),
+          isFileUrl(n.attrs.src) || /^data:image\//.test(n.attrs.src)
+            ? h("img", { src: n.attrs.src, alt: n.attrs.alt, loading: "lazy" })
+            : h("div", { class: "muted small" }, "Image not available"),
           n.attrs.caption ? h("figcaption", {}, n.attrs.caption) : null,
           blockControls(editor, [h("button", { class: "button", type: "button", onclick: () => editFigure(n) }, icon("edit"), "Alt text, caption and size")]),
         );
@@ -248,16 +252,22 @@ export const HtmlEmbed = Node.create({
   renderHTML: ({ node }) => ["div", { "data-html-embed": "", "data-html": node.attrs.html }],
   addNodeView() {
     return ({ node, editor, getPos }) => {
-      const preview = h("div", { class: "html-embed__preview" }, htmlEmbedFrame(node.attrs.html));
+      // The code is stored in the node on every keystroke (never with a delay,
+      // so it can't land on another step's embed after switching steps). Only
+      // the preview waits a moment before reloading.
+      let current = node.attrs.html;
+      let previewTimer = null;
+      const preview = h("div", { class: "html-embed__preview" }, htmlEmbedFrame(current));
+      const refreshPreview = () => {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(() => preview.replaceChildren(htmlEmbedFrame(current)), 600);
+      };
       const dom = h("div", { class: "html-embed" });
+      let code = null;
       if (editor.isEditable) {
-        const code = h("textarea", { class: "html-embed__code", spellcheck: "false", "aria-label": "HTML code", placeholder: "<iframe src=...></iframe> or any HTML" });
-        code.value = node.attrs.html;
-        let timer = null;
-        code.addEventListener("input", () => {
-          clearTimeout(timer);
-          timer = setTimeout(() => setAttrs(editor, getPos, { html: code.value }), 600);
-        });
+        code = h("textarea", { class: "html-embed__code", spellcheck: "false", "aria-label": "HTML code", placeholder: "<iframe src=...></iframe> or any HTML" });
+        code.value = current;
+        code.addEventListener("input", () => setAttrs(editor, getPos, { html: code.value }));
         dom.append(h("div", { class: "block-controls block-controls--static", contenteditable: "false" }, h("span", { class: "small muted" }, "HTML embed: runs in a sandbox, without access to the handbook.")), code, h("div", { class: "small muted", style: "margin:8px 0 4px" }, "Preview"));
       }
       dom.append(preview);
@@ -265,12 +275,16 @@ export const HtmlEmbed = Node.create({
         dom,
         update: (n) => {
           if (n.type.name !== "htmlEmbed") return false;
-          if (n.attrs.html !== node.attrs.html) {
-            node = n;
-            preview.replaceChildren(htmlEmbedFrame(n.attrs.html));
+          if (n.attrs.html !== current) {
+            current = n.attrs.html;
+            // This view can be reused for another embed (for example after
+            // switching steps): always show that embed's own code.
+            if (code && code.value !== current) code.value = current;
+            refreshPreview();
           }
           return true;
         },
+        destroy: () => clearTimeout(previewTimer),
         stopEvent: stopInputs,
         ignoreMutation: () => true,
       };

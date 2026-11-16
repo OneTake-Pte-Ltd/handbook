@@ -32,7 +32,7 @@ export function extensions({ placeholder } = {}) {
 
 // Pasting from Google Docs or Notion keeps headings, lists, links, bold,
 // italic and tables, and drops everything else.
-const PASTE_TAGS = ["p", "br", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "strong", "b", "em", "i", "a", "table", "thead", "tbody", "tr", "th", "td"];
+const PASTE_TAGS = ["p", "br", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "strong", "b", "em", "i", "a", "table", "thead", "tbody", "tr", "th", "td", "img"];
 
 export function cleanPastedHtml(html) {
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -63,7 +63,7 @@ export function cleanPastedHtml(html) {
   // Headings 1 and 4 to 6 become the two levels the handbook uses.
   for (const el of doc.querySelectorAll("h1")) renameTag(doc, el, "h2");
   for (const el of doc.querySelectorAll("h4, h5, h6")) renameTag(doc, el, "h3");
-  return DOMPurify.sanitize(doc.body.innerHTML, { ALLOWED_TAGS: PASTE_TAGS, ALLOWED_ATTR: ["href", "colspan", "rowspan"], ALLOWED_URI_REGEXP: /^(https?:|mailto:)/i });
+  return DOMPurify.sanitize(doc.body.innerHTML, { ALLOWED_TAGS: PASTE_TAGS, ALLOWED_ATTR: ["href", "colspan", "rowspan", "src", "alt"], ALLOWED_URI_REGEXP: /^(https?:|mailto:)/i });
 }
 
 function renameTag(doc, el, tag) {
@@ -72,7 +72,12 @@ function renameTag(doc, el, tag) {
   el.replaceWith(next);
 }
 
-export function createEditor({ element, content, editable = true, placeholder, onUpdate, onSelectionUpdate }) {
+const imageFiles = (list) => [...(list || [])].filter((f) => /^image\/(png|jpeg|gif|webp)$/.test(f.type));
+
+// onImageFiles(files, position): image files pasted or dropped on their own
+// (for example a screenshot). Pasted HTML with images goes through
+// cleanPastedHtml instead, and the images are copied afterwards.
+export function createEditor({ element, content, editable = true, placeholder, onUpdate, onSelectionUpdate, onImageFiles }) {
   return new Editor({
     element,
     editable,
@@ -81,6 +86,24 @@ export function createEditor({ element, content, editable = true, placeholder, o
     editorProps: {
       attributes: { class: "prose ProseMirror-themed", ...(editable ? { "aria-label": "Step content", role: "textbox", "aria-multiline": "true" } : {}) },
       transformPastedHTML: cleanPastedHtml,
+      handlePaste: onImageFiles
+        ? (view, event) => {
+            const data = event.clipboardData;
+            const files = imageFiles(data && data.files);
+            if (!files.length || (data.getData("text/html") || "").includes("<img")) return false;
+            onImageFiles(files, null);
+            return true;
+          }
+        : undefined,
+      handleDrop: onImageFiles
+        ? (view, event, slice, moved) => {
+            const files = moved ? [] : imageFiles(event.dataTransfer && event.dataTransfer.files);
+            if (!files.length) return false;
+            const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
+            onImageFiles(files, at ? at.pos : null);
+            return true;
+          }
+        : undefined,
     },
     onUpdate: onUpdate ? ({ editor }) => onUpdate(editor) : undefined,
     onSelectionUpdate: onSelectionUpdate ? ({ editor }) => onSelectionUpdate(editor) : undefined,

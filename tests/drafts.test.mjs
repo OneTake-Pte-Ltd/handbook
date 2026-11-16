@@ -183,3 +183,33 @@ test("editor content is cleaned: unknown nodes, unsafe links and non-https playe
   assert.equal(clean.content[3].attrs.html, "<script>alert(document.cookie)</script>", "HTML embeds are kept; they only ever run in a sandboxed iframe");
   assert.equal(docToText(clean), "Click\nDemo\nChart Q3");
 });
+
+test("moving a step goes through both drafts; readers see nothing until each is published", async () => {
+  const s = await setup();
+  const from = await s.newDoc("From", "Keep me");
+  const to = await s.newDoc("To", "Already here");
+  await s.save(from, (snap) => snap.steps.push({ id: null, key: "n1", title: "Travelling step", content_json: paragraph("I move") }));
+  const opened = (await s.open(from)).body;
+  const key = opened.draft.snapshot.steps[1].key;
+
+  const stale = await s.call("POST", `/api/documents/${from}/draft/move-step`, { step_key: key, target_document_id: to, base_updated_at: null });
+  assert.equal(stale.status, 409);
+  const moved = await s.call("POST", `/api/documents/${from}/draft/move-step`, { step_key: key, target_document_id: to, base_updated_at: opened.draft.updated_at });
+  assert.equal(moved.status, 200);
+  assert.deepEqual(moved.body.snapshot.steps.map((st) => st.title), ["From"]);
+
+  const target = (await s.open(to)).body.draft.snapshot;
+  assert.deepEqual(target.steps.map((st) => st.title), ["To", "Travelling step"]);
+  assert.equal(target.steps[1].id, null, "a new step in the other document");
+  assert.equal((await s.call("GET", `/api/documents/${to}`)).body.steps.length, 1, "readers still see the published version");
+
+  // The only step left can't be moved, and a member without edit rights on the target can't move there.
+  const again = (await s.open(from)).body.draft;
+  const only = await s.call("POST", `/api/documents/${from}/draft/move-step`, { step_key: again.snapshot.steps[0].key, target_document_id: to, base_updated_at: again.updated_at });
+  assert.equal(only.status, 400);
+  const editor = await s.member("Eddie", []);
+  await s.call("PUT", "/api/grants", { target_type: "document", target_id: from, principal_type: "user", principal_id: editor.id, level: "edit_publish" });
+  await s.call("PUT", "/api/grants", { target_type: "document", target_id: to, principal_type: "user", principal_id: editor.id, level: "view" });
+  const refused = await s.call("POST", `/api/documents/${from}/draft/move-step`, { step_key: again.snapshot.steps[0].key, target_document_id: to, base_updated_at: again.updated_at }, editor.token);
+  assert.equal(refused.status, 403);
+});

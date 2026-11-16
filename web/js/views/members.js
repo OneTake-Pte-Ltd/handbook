@@ -21,6 +21,7 @@ import { fullName, relativeTime } from "../lib/format.js";
 import { isAdmin, session } from "../state.js";
 import { openAddMemberDialog, temporaryPasswordPanel } from "./member-form.js";
 import { renderAccessTree } from "./access.js";
+import { photoEditor } from "../lib/photo-editor.js";
 
 export function completionText(completion) {
   if (!completion || !completion.total) return "No mandatory documents";
@@ -153,7 +154,15 @@ export async function renderMemberPage(container, id) {
     return renderMemberPage(container, id);
   };
 
-  // Header
+  // Header (admins and the member's team leaders can change the photo)
+  const editPhoto = permissions.can_edit_photo
+    ? photoEditor(user, {
+        own: self,
+        onSaved: (saved) => {
+          if (self) Object.assign(session.me.user, { avatar_url: saved.avatar_url });
+        },
+      })
+    : null;
   container.append(
     h("a", { class: "back-link", href: "#/organization" }, icon("arrowLeft"), "Members"),
     h(
@@ -162,7 +171,7 @@ export async function renderMemberPage(container, id) {
       h(
         "div",
         { class: "profile-head" },
-        avatar(user, "lg"),
+        editPhoto ? editPhoto.photo : avatar(user, "lg"),
         h(
           "div",
           {},
@@ -173,6 +182,7 @@ export async function renderMemberPage(container, id) {
           h("div", { class: "muted small", style: "margin-top:4px" }, user.last_login_at ? `Last login ${relativeTime(user.last_login_at)}` : "Has not logged in yet"),
         ),
       ),
+      editPhoto ? editPhoto.controls : null,
     ),
   );
 

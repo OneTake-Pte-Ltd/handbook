@@ -229,8 +229,14 @@ async function currentVersion(db) {
 }
 
 export async function migrate(db) {
-  await db.run("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
-  let version = await currentVersion(db);
+  // One query on a normal cold start; the table is only created the first time.
+  let version;
+  try {
+    version = await currentVersion(db);
+  } catch {
+    await db.run("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
+    version = await currentVersion(db);
+  }
   for (const migration of MIGRATIONS) {
     if (migration.version <= version) continue;
     const statements = migration.statements.map((sql) => [sql, []]);

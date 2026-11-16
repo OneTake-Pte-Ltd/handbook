@@ -10,7 +10,7 @@ import { HttpError, badRequest, forbidden, json, noContent, notFound, optionalSt
 import { accessFor, atLeast, canEditDocument, canView } from "./permissions.js";
 import { notificationStatement, peopleAccess, requireAdmin } from "./people.js";
 import { unindexDocumentsStatement } from "./search.js";
-import { progressFor, progressStatus } from "./progress.js";
+import { progressFromRows, progressQuery, progressStatus } from "./progress.js";
 
 // Plain text (milestone 3 editor) to the Tiptap JSON stored in content_json.
 // Blank lines separate paragraphs; single line breaks become hard breaks.
@@ -58,13 +58,15 @@ function touch(ctx, documentId) {
 export async function handleTree(ctx) {
   const access = await accessFor(ctx);
   const editMode = ctx.url.searchParams.get("mode") === "edit";
-  const [spaces, categories, documents, progress, drafts] = await Promise.all([
-    ctx.db.all("SELECT * FROM spaces ORDER BY position, id"),
-    ctx.db.all("SELECT * FROM categories ORDER BY position, id"),
-    ctx.db.all("SELECT id, category_id, title, description, position, is_published, published_at, last_major_revision_at, updated_at FROM documents ORDER BY position, id"),
-    progressFor(ctx.db, ctx.user.id),
-    editMode ? ctx.db.all("SELECT document_id, status FROM drafts") : [],
+  // One round trip for everything the tree needs.
+  const [spaces, categories, documents, progressRows, drafts] = await ctx.db.many([
+    ["SELECT * FROM spaces ORDER BY position, id", []],
+    ["SELECT * FROM categories ORDER BY position, id", []],
+    ["SELECT id, category_id, title, position, is_published, last_major_revision_at, updated_at FROM documents ORDER BY position, id", []],
+    progressQuery(ctx.user.id),
+    [editMode ? "SELECT document_id, status FROM drafts" : "SELECT 1 WHERE 0", []],
   ]);
+  const progress = progressFromRows(progressRows);
   const draftStatus = new Map(drafts.map((d) => [d.document_id, d.status]));
   const docsByCategory = new Map();
   for (const d of documents) {
@@ -93,22 +95,25 @@ export async function handleTree(ctx) {
   const tree = spaces
     .map((s) => ({ id: s.id, name: s.name, categories: categoriesBySpace.get(s.id) || [] }))
     .filter((s) => s.categories.length || (editMode && access.isAdmin));
-  return json({ spaces: tree, can_manage: access.isAdmin, can_edit: access.canEditAnything });
+  return json({ spaces: tree, edit_mode: editMode, can_manage: access.isAdmin, can_edit: access.canEditAnything });
 }
 
 // GET /api/documents/:id
 export async function handleGetDocument(ctx) {
-  const document = await visibleDocument(ctx, ctx.params.id);
-  const access = await accessFor(ctx);
-  const [category, steps, completions] = await Promise.all([
-    ctx.db.first("SELECT c.id, c.name, c.emoji, s.id AS space_id, s.name AS space_name FROM categories c JOIN spaces s ON s.id = c.space_id WHERE c.id = ?", document.category_id),
-    ctx.db.all("SELECT id, title, position, content_json, content_text, updated_at FROM steps WHERE document_id = ? ORDER BY position, id", document.id),
-    ctx.db.all(
-      "SELECT c.step_id, c.completed_at FROM step_completions c JOIN steps s ON s.id = c.step_id WHERE s.document_id = ? AND c.user_id = ?",
-      document.id,
-      ctx.user.id,
-    ),
+  const id = Number(ctx.params.id);
+  // One round trip: the document, its category, steps, the member's
+  // completions and any open draft.
+  const [documents, categories, steps, completions, drafts] = await ctx.db.many([
+    ["SELECT * FROM documents WHERE id = ?", [id]],
+    ["SELECT c.id, c.name, c.emoji, s.id AS space_id, s.name AS space_name FROM categories c JOIN spaces s ON s.id = c.space_id JOIN documents d ON d.category_id = c.id WHERE d.id = ?", [id]],
+    ["SELECT id, title, position, content_json, content_text, updated_at FROM steps WHERE document_id = ? ORDER BY position, id", [id]],
+    ["SELECT c.step_id, c.completed_at FROM step_completions c JOIN steps s ON s.id = c.step_id WHERE s.document_id = ? AND c.user_id = ?", [id, ctx.user.id]],
+    ["SELECT d.status, d.updated_at, u.first_name, u.last_name FROM drafts d LEFT JOIN users u ON u.id = d.author_id WHERE d.document_id = ?", [id]],
   ]);
+  const document = documents[0];
+  const access = await accessFor(ctx);
+  if (!document || !canView(access, document)) throw notFound("This document doesn't exist or you don't have access to it.");
+  const category = categories[0];
   const completedAt = new Map(completions.map((c) => [c.step_id, c.completed_at]));
   const major = document.last_major_revision_at;
   const stepList = steps.map((s) => {
@@ -126,12 +131,8 @@ export async function handleGetDocument(ctx) {
   });
   const done = stepList.filter((s) => s.completed).length;
   const level = access.level(document.id);
-  const draft = atLeast(level, "edit_review")
-    ? await ctx.db.first(
-        "SELECT d.status, d.updated_at, u.first_name, u.last_name FROM drafts d LEFT JOIN users u ON u.id = d.author_id WHERE d.document_id = ?",
-        document.id,
-      )
-    : null;
+  // Readers don't even learn that a draft exists.
+  const draft = atLeast(level, "edit_review") ? drafts[0] || null : null;
   return json({
     draft: draft ? { status: draft.status, updated_at: draft.updated_at, author: draft.first_name ? `${draft.first_name} ${draft.last_name}` : null } : null,
     document: {

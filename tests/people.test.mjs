@@ -163,6 +163,21 @@ test("members edit their own names and photo, but not their role title", async (
   assert.equal((await t.call("GET", "/api/users", { token: sam.token })).status, 403, "plain members don't see the list");
 });
 
+test("admins and the member's team leaders can change a member's photo; other members can't", async () => {
+  const { t, admin, dept, member } = await workspace();
+  const leader = await member("Lea", [{ id: dept.Marketing, is_leader: true }]);
+  const sam = await member("Sam", [dept.Marketing]);
+  const pat = await member("Pat", [dept.Product]);
+  const photo = { avatar_url: "https://files.example.com/sam.jpg" };
+  const byLeader = await t.call("PATCH", `/api/users/${sam.id}`, { token: leader.token, body: photo });
+  assert.equal(byLeader.status, 200);
+  assert.equal(byLeader.body.user.avatar_url, photo.avatar_url);
+  assert.equal((await t.call("PATCH", `/api/users/${sam.id}`, { token: admin, body: { avatar_url: "" } })).status, 200);
+  assert.equal((await t.call("PATCH", `/api/users/${pat.id}`, { token: leader.token, body: photo })).status, 403, "not in a department Lea leads");
+  assert.equal((await t.call("PATCH", `/api/users/${sam.id}`, { token: pat.token, body: photo })).status, 403);
+  assert.equal((await t.call("GET", `/api/users/${sam.id}`, { token: leader.token })).body.permissions.can_edit_photo, true);
+});
+
 test("departments: create, rename, delete; Everyone is protected and counts every active member", async () => {
   const { t, admin, dept, member } = await workspace();
   await member("Ann", [dept.Product]);
@@ -233,6 +248,40 @@ test("uploads: images are checked from their bytes and stored under uploads/", a
 
   const fake = await upload(new TextEncoder().encode("<svg onload=alert(1)>"), "x.svg");
   assert.equal(fake.status, 400);
+});
+
+test("pasted images from other websites are copied into storage; private addresses and non-images are refused", async () => {
+  const stored = [];
+  const t = createTestApp({ STORAGE_ZONE: "zone", STORAGE_KEY: "key", STORAGE_REGION_HOST: "sg.storage.bunnycdn.com", PUBLIC_FILES_URL: "https://files.example.com" });
+  const admin = await setupAdmin(t);
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  const web = {
+    "https://images.example.com/shots/Screen%20Shot.png": () => new Response(png, { status: 200 }),
+    "https://images.example.com/moved": () => new Response(null, { status: 302, headers: { location: "http://192.168.1.10/secret.png" } }),
+    "https://images.example.com/page": () => new Response("<html></html>", { status: 200 }),
+  };
+  const { createApp } = await import("../edge/src/app.js");
+  const app = createApp({
+    db: t.db,
+    env: t.env,
+    fetchImpl: async (url, init) => {
+      if (url.startsWith("https://sg.storage.bunnycdn.com/")) {
+        stored.push(url);
+        return new Response(null, { status: 201 });
+      }
+      return web[url] ? web[url]() : new Response("not found", { status: 404 });
+    },
+  });
+  const importUrl = (url) =>
+    app.handle(new Request("https://edge.example.com/api/files/import-url", { method: "POST", headers: { Authorization: `Bearer ${admin}`, "Content-Type": "application/json", Origin: "https://academy.example.com" }, body: JSON.stringify({ url }) }));
+  const ok = await importUrl("https://images.example.com/shots/Screen%20Shot.png");
+  assert.equal(ok.status, 201);
+  assert.match((await ok.json()).url, /^https:\/\/files\.example\.com\/uploads\/.*-Screen-Shot\.png$/);
+  assert.equal(stored.length, 1);
+  assert.equal((await importUrl("https://images.example.com/moved")).status, 400, "redirect to a private address");
+  assert.equal((await importUrl("http://localhost:9000/x.png")).status, 400);
+  assert.equal((await importUrl("https://images.example.com/page")).status, 400, "not an image");
+  assert.equal(stored.length, 1);
 });
 
 test("uploads explain when storage is not configured", async () => {

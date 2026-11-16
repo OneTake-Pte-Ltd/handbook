@@ -97,6 +97,8 @@ export function corsHeaders(origin, allowed) {
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type, X-File-Name",
     "Access-Control-Max-Age": "86400",
+    "Access-Control-Expose-Headers": "Server-Timing",
+    "Timing-Allow-Origin": origin,
     Vary: "Origin",
   };
 }

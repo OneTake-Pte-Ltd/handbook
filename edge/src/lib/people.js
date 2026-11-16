@@ -15,6 +15,7 @@ import { HttpError, badRequest, forbidden, json, noContent, normalizeEmail, notF
 import { hashPassword, temporaryPassword } from "./crypto.js";
 import { publicUser } from "./auth.js";
 import { completionRates } from "./progress.js";
+import { requestAccessData } from "./permissions.js";
 
 // Statements that create an in-app notification (shown from milestone 6).
 export function notificationStatement(userId, type, payload) {
@@ -157,7 +158,7 @@ export async function handleListUsers(ctx) {
     ...args,
   );
   const memberships = await membershipsByUser(ctx.db, users.map((u) => u.id));
-  const rates = await completionRates(ctx.db, users);
+  const rates = await completionRates(ctx.db, users, await requestAccessData(ctx));
   return json({ users: users.map((u) => ({ ...memberSummary(u, memberships.get(u.id)), completion: rates.get(u.id) })) });
 }
 
@@ -170,11 +171,12 @@ export async function handleGetUser(ctx) {
   const leadsOne = departments.some((d) => access.leads.has(d.id));
   if (!access.isAdmin && !self && !leadsOne) throw forbidden("You can't see this member.");
   const manageable = await canManageMember(ctx, target);
-  const completion = (await completionRates(ctx.db, [target])).get(target.id);
+  const completion = (await completionRates(ctx.db, [target], await requestAccessData(ctx))).get(target.id);
   return json({
     user: { ...memberSummary(target, departments), completion },
     permissions: {
       can_edit_details: manageable,
+      can_edit_photo: self || manageable,
       can_edit_email: access.isAdmin,
       can_reset_password: manageable && !self,
       can_change_status: access.isAdmin && !self,
@@ -285,7 +287,7 @@ export async function handleUpdateUser(ctx) {
     changes.role_title = optionalString(body, "role_title", "Role title", { max: 120 });
   }
   if ("avatar_url" in body) {
-    if (!self && !access.isAdmin) throw forbidden("You can only change your own photo.");
+    if (!self && !(await canManageMember(ctx, target))) throw forbidden("You can't change this member's photo.");
     const value = optionalString(body, "avatar_url", "Photo", { max: 1000 });
     // https only; http://localhost is accepted for the local dev server.
     if (value && !/^(https:\/\/|http:\/\/localhost[:/])/.test(value)) throw badRequest("The photo must be an https:// address.");

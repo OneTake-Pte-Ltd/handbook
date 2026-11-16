@@ -3,14 +3,17 @@
 // instead (see moveItem).
 //
 // sortable(list, { handle: ".drag-handle", item: "li", onEnd: (orderedIds) => {} })
-// Each item needs data-id. onEnd is called only when the order changed.
+// Each item needs data-id. onEnd(ids) gets the new order as strings, and is
+// only called when the order changed.
 
 export function sortable(list, { handle, item, onEnd }) {
   let dragging = null;
   let startOrder = null;
 
   const items = () => [...list.children].filter((el) => el.matches(item));
-  const order = () => items().map((el) => Number(el.dataset.id));
+  // Ids stay strings: draft steps use keys like "s12" or "n4k2". Callers that
+  // need numbers convert them.
+  const order = () => items().map((el) => el.dataset.id);
 
   list.addEventListener("pointerdown", (event) => {
     const grip = event.target.closest(handle);

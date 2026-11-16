@@ -11,7 +11,7 @@
 //   not_started      nothing
 
 import { forbidden, json, notFound } from "./http.js";
-import { accessFor, atLeast, loadAccessData, mandatoryByUser } from "./permissions.js";
+import { accessFor, atLeast, mandatoryByUser, requestAccessData } from "./permissions.js";
 import { peopleAccess } from "./people.js";
 
 // The members the current user may report on.
@@ -109,7 +109,7 @@ export async function handleReportOverview(ctx) {
     }
   }
   const ids = users.map((u) => u.id);
-  const [data, completion, activity, departments] = await Promise.all([loadAccessData(ctx.db), completionData(ctx.db), lastActivity(ctx.db, ids), departmentsOf(ctx.db, ids)]);
+  const [data, completion, activity, departments] = await Promise.all([requestAccessData(ctx), completionData(ctx.db), lastActivity(ctx.db, ids), departmentsOf(ctx.db, ids)]);
   const mandatory = mandatoryByUser(data, users);
   const rows = users.map((u) => {
     const docs = [...mandatory.get(u.id)];
@@ -131,7 +131,7 @@ export async function handleReportUser(ctx) {
   const users = await scopeUsers(ctx);
   const target = users.find((u) => u.id === Number(ctx.params.id));
   if (!target) throw notFound("This member doesn't exist, or isn't in a department you lead.");
-  const [data, completion, viewerAccess] = await Promise.all([loadAccessData(ctx.db), completionData(ctx.db), accessFor(ctx)]);
+  const [data, completion, viewerAccess] = await Promise.all([requestAccessData(ctx), completionData(ctx.db), accessFor(ctx)]);
   const mandatory = [...mandatoryByUser(data, [target]).get(target.id)];
   const documents = mandatory
     .map((id) => {
@@ -166,7 +166,7 @@ export async function handleReportDocument(ctx) {
     Number(ctx.params.id),
   );
   if (!document || (!access.isAdmin && !atLeast(access.level(document.id), "view"))) throw notFound("This document doesn't exist or you don't have access to it.");
-  const [data, completion] = await Promise.all([loadAccessData(ctx.db), completionData(ctx.db)]);
+  const [data, completion] = await Promise.all([requestAccessData(ctx), completionData(ctx.db)]);
   // Treat it as published so a report can be prepared before publication.
   data.documents = data.documents.map((d) => (d.id === document.id ? { ...d, is_published: 1 } : d));
   const mandatory = mandatoryByUser(data, users);
