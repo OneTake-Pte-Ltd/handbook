@@ -4,6 +4,7 @@
 
 import { HttpError, corsHeaders, errorResponse, json, notFound, parseAllowedOrigins, readJson, withHeaders } from "./lib/http.js";
 import { migrate } from "./lib/migrations.js";
+import { measured } from "./lib/db.js";
 import {
   authenticate,
   handleChangePassword,
@@ -188,14 +189,18 @@ export function createApp({ db, env, fetchImpl = (...args) => fetch(...args) }) 
 
     const { route, params } = matchRoute(request.method, url.pathname);
     await ensureMigrated();
-    const ctx = { db, env, request, url, params, origin, fetchImpl, user: null };
+    const requestDb = measured(db);
+    const ctx = { db: requestDb, env, request, url, params, origin, fetchImpl, user: null };
     if (!route.options.public) {
-      ctx.user = await authenticate(db, request);
+      ctx.user = await authenticate(ctx);
       if (ctx.user.must_change_password && !route.options.allowPasswordChange) {
         throw new HttpError(403, "Please choose a new password first.", { code: "must_change_password" });
       }
     }
-    return route.handler(ctx);
+    const response = await route.handler(ctx);
+    // Visible in the browser's network tools: how much of the time was the database.
+    response.headers.set("Server-Timing", `db;desc="${requestDb.stats.calls} database calls";dur=${requestDb.stats.ms.toFixed(1)}`);
+    return response;
   }
 
   return {

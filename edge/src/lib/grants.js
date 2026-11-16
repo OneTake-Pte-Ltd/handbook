@@ -6,7 +6,7 @@
 
 import { nowIso } from "./db.js";
 import { badRequest, forbidden, json, noContent, notFound, readJson } from "./http.js";
-import { LEVELS, accessFor, atLeast, loadAccessData, mandatoryByUser, rank, resolveAccess } from "./permissions.js";
+import { LEVELS, accessFor, atLeast, loadAccessData, mandatoryByUser, rank, requestAccessData, resolveAccess } from "./permissions.js";
 import { notificationStatement, peopleAccess } from "./people.js";
 
 function parseRef(value, types) {
@@ -137,7 +137,7 @@ export async function handleListGrants(ctx) {
   // Effective access, shown next to each row.
   const effective = {};
   if (principal.type === "user") {
-    const data = await loadAccessData(ctx.db);
+    const data = await requestAccessData(ctx);
     const resolved = resolveAccess(data, record);
     for (const space of tree) {
       for (const c of space.categories) {

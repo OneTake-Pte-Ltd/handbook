@@ -37,6 +37,9 @@ export function documentHeader({ title, description, category, steps, badges }) 
 export async function render(main, { path }) {
   const match = /^\/doc\/(\d+)(?:\/step\/([\w-]+))?$/.exec(path);
   const docId = Number(match[1]);
+  // Start loading the editor library while the document is fetched.
+  const editorModule = import("../editor/setup.js");
+  editorModule.catch(() => {});
   const data = await api("GET", `/documents/${docId}`);
   window.dispatchEvent(new CustomEvent("handbook:active-document", { detail: docId }));
 

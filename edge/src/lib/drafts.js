@@ -12,7 +12,7 @@
 
 import { nowIso } from "./db.js";
 import { HttpError, badRequest, forbidden, json, noContent, notFound, optionalString, readJson } from "./http.js";
-import { accessFor, atLeast, canView, loadAccessData, mandatoryByUser, resolveAccess } from "./permissions.js";
+import { accessFor, atLeast, canView, mandatoryByUser, requestAccessData, resolveAccess } from "./permissions.js";
 import { notificationStatement } from "./people.js";
 import { indexDocumentStatements } from "./search.js";
 import { cleanDoc, docToText } from "./richtext.js";
@@ -41,50 +41,21 @@ async function publishedSnapshot(db, document) {
   };
 }
 
-async function userName(db, id) {
-  if (!id) return null;
-  const u = await db.first("SELECT id, first_name, last_name FROM users WHERE id = ?", id);
-  return u ? { id: u.id, name: `${u.first_name} ${u.last_name}` } : null;
+
+// Reviewers of a document: user ids. Pass `users` (active users) when calling
+// it for several documents, to avoid reading them again.
+export async function reviewersOf(ctx, documentId, users = null) {
+  const active = users || (await ctx.db.all("SELECT * FROM users WHERE is_active = 1"));
+  const data = await requestAccessData(ctx);
+  const editors = active.filter((u) => !u.is_admin && resolveAccess(data, u).level(documentId) === "edit_publish");
+  return (editors.length ? editors : active.filter((u) => u.is_admin)).map((u) => u.id);
 }
 
-// Reviewers of a document: user ids.
-export async function reviewersOf(db, documentId) {
-  const users = await db.all("SELECT * FROM users WHERE is_active = 1");
-  const data = await loadAccessData(db);
-  const editors = users.filter((u) => !u.is_admin && resolveAccess(data, u).level(documentId) === "edit_publish");
-  return (editors.length ? editors : users.filter((u) => u.is_admin)).map((u) => u.id);
-}
-
-async function draftView(ctx, document, draft, level) {
-  const isAuthor = draft.author_id === ctx.user.id;
-  const reviewers = draft.status === "submitted" ? await reviewersOf(ctx.db, document.id) : [];
-  const canReview = draft.status === "submitted" && (ctx.user.is_admin || level === "edit_publish" || reviewers.includes(ctx.user.id));
+function snapshotFromSteps(document, steps) {
   return {
-    draft: {
-      id: draft.id,
-      status: draft.status,
-      revision_type: draft.revision_type,
-      submit_note: draft.submit_note,
-      review_comment: draft.review_comment,
-      author: await userName(ctx.db, draft.author_id),
-      reviewer: await userName(ctx.db, draft.reviewer_id),
-      submitted_at: draft.submitted_at,
-      reviewed_at: draft.reviewed_at,
-      created_at: draft.created_at,
-      updated_at: draft.updated_at,
-      snapshot: JSON.parse(draft.snapshot_json),
-    },
-    published: document.published_at ? await publishedSnapshot(ctx.db, document) : null,
-    document: { id: document.id, is_published: Boolean(document.is_published), published_at: document.published_at },
-    permissions: {
-      level,
-      can_edit: draft.status !== "submitted",
-      can_publish: level === "edit_publish" && draft.status !== "submitted",
-      can_submit: draft.status !== "submitted",
-      can_review: canReview,
-      can_discard: isAuthor || level === "edit_publish",
-      is_author: isAuthor,
-    },
+    title: document.title,
+    description: document.description || "",
+    steps: steps.map((s) => ({ id: s.id, key: `s${s.id}`, title: s.title, content_json: s.content_json ? JSON.parse(s.content_json) : cleanDoc(null) })),
   };
 }
 
@@ -92,16 +63,59 @@ async function draftView(ctx, document, draft, level) {
 // Returns the open draft, or, when nobody is editing, the published content
 // as a starting point (draft: null). The draft itself is created by the first
 // save, so merely opening a document in Edit mode leaves no trace.
+// Everything is read in one round trip.
 export async function handleGetDraft(ctx) {
-  const { document, level } = await requireEditor(ctx, ctx.params.id);
-  const draft = await ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", document.id);
-  if (draft) return json(await draftView(ctx, document, draft, level));
+  const id = Number(ctx.params.id);
+  const [documents, drafts, steps, users] = await ctx.db.many([
+    ["SELECT * FROM documents WHERE id = ?", [id]],
+    ["SELECT * FROM drafts WHERE document_id = ?", [id]],
+    ["SELECT id, title, content_json FROM steps WHERE document_id = ? ORDER BY position, id", [id]],
+    ["SELECT id, first_name, last_name, is_admin, is_active FROM users", []],
+  ]);
+  const document = documents[0];
+  const access = await accessFor(ctx);
+  if (!document || !canView(access, document)) throw notFound("This document doesn't exist or you don't have access to it.");
+  const level = access.level(document.id);
+  if (!atLeast(level, "edit_review")) throw forbidden("You can't edit this document.");
+  const published = snapshotFromSteps(document, steps);
+  const base = { published: document.published_at ? published : null, document: { id: document.id, is_published: Boolean(document.is_published), published_at: document.published_at } };
+  const draft = drafts[0];
+  if (!draft) {
+    return json({
+      draft: null,
+      snapshot: published,
+      ...base,
+      permissions: { level, can_edit: true, can_publish: level === "edit_publish", can_submit: false, can_review: false, can_discard: false, is_author: false },
+    });
+  }
+  const names = new Map(users.map((u) => [u.id, { id: u.id, name: `${u.first_name} ${u.last_name}` }]));
+  const isAuthor = draft.author_id === ctx.user.id;
+  const reviewers = draft.status === "submitted" ? await reviewersOf(ctx, document.id, users.filter((u) => u.is_active)) : [];
   return json({
-    draft: null,
-    snapshot: await publishedSnapshot(ctx.db, document),
-    published: document.published_at ? await publishedSnapshot(ctx.db, document) : null,
-    document: { id: document.id, is_published: Boolean(document.is_published), published_at: document.published_at },
-    permissions: { level, can_edit: true, can_publish: level === "edit_publish", can_submit: false, can_review: false, can_discard: false, is_author: false },
+    draft: {
+      id: draft.id,
+      status: draft.status,
+      revision_type: draft.revision_type,
+      submit_note: draft.submit_note,
+      review_comment: draft.review_comment,
+      author: names.get(draft.author_id) || null,
+      reviewer: names.get(draft.reviewer_id) || null,
+      submitted_at: draft.submitted_at,
+      reviewed_at: draft.reviewed_at,
+      created_at: draft.created_at,
+      updated_at: draft.updated_at,
+      snapshot: JSON.parse(draft.snapshot_json),
+    },
+    ...base,
+    permissions: {
+      level,
+      can_edit: draft.status !== "submitted",
+      can_publish: level === "edit_publish" && draft.status !== "submitted",
+      can_submit: draft.status !== "submitted",
+      can_review: draft.status === "submitted" && (Boolean(ctx.user.is_admin) || level === "edit_publish" || reviewers.includes(ctx.user.id)),
+      can_discard: isAuthor || level === "edit_publish",
+      is_author: isAuthor,
+    },
   });
 }
 
@@ -198,7 +212,7 @@ export async function handleSubmitDraft(ctx) {
       [revision, note, ctx.user.id, now, now, draft.id],
     ],
   ];
-  for (const reviewer of await reviewersOf(ctx.db, document.id)) {
+  for (const reviewer of await reviewersOf(ctx, document.id)) {
     if (reviewer === ctx.user.id) continue;
     statements.push(notificationStatement(reviewer, "review_requested", { document_id: document.id, title: snapshot.title, by: ctx.user.id }));
   }
@@ -207,9 +221,9 @@ export async function handleSubmitDraft(ctx) {
 }
 
 // Users for whom the document is mandatory (to notify), as if published.
-async function mandatoryAudience(db, documentId) {
-  const users = await db.all("SELECT id, is_active, is_admin FROM users WHERE is_active = 1");
-  const data = await loadAccessData(db);
+async function mandatoryAudience(ctx, documentId) {
+  const users = await ctx.db.all("SELECT id, is_active, is_admin FROM users WHERE is_active = 1");
+  const data = await requestAccessData(ctx);
   data.documents = data.documents.map((d) => (d.id === documentId ? { ...d, is_published: 1 } : d));
   const mandatory = mandatoryByUser(data, users);
   return users.filter((u) => mandatory.get(u.id).has(documentId)).map((u) => u.id);
@@ -260,7 +274,7 @@ async function applyDraft(ctx, document, draft, revision, extraStatements = []) 
   statements.push(["DELETE FROM drafts WHERE id = ?", [draft.id]]);
   statements.push(...extraStatements);
   if (firstPublication || major) {
-    for (const userId of await mandatoryAudience(ctx.db, document.id)) {
+    for (const userId of await mandatoryAudience(ctx, document.id)) {
       statements.push(notificationStatement(userId, major ? "major_revision" : "mandatory_assigned", { document_id: document.id, title: snapshot.title }));
     }
   }
@@ -286,7 +300,7 @@ async function requireReviewer(ctx) {
   const { document, level } = await documentFor(ctx, ctx.params.id);
   const draft = await ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", document.id);
   if (!draft || draft.status !== "submitted") throw badRequest("There is no draft waiting for review.");
-  const reviewers = await reviewersOf(ctx.db, document.id);
+  const reviewers = await reviewersOf(ctx, document.id);
   if (!ctx.user.is_admin && level !== "edit_publish" && !reviewers.includes(ctx.user.id)) throw forbidden("You can't review this document.");
   return { document, draft };
 }
@@ -318,13 +332,18 @@ export async function handleRejectDraft(ctx) {
   return json({ ok: true });
 }
 
-// Drafts waiting for the current user's review (home page, milestone 6).
+// Drafts waiting for the current user's review (home page).
 export async function draftsToReview(ctx) {
   const drafts = await ctx.db.all("SELECT d.document_id, d.snapshot_json, d.author_id, d.submitted_at FROM drafts d WHERE d.status = 'submitted'");
+  if (!drafts.length) return [];
+  const users = await ctx.db.all("SELECT * FROM users WHERE is_active = 1");
+  const names = new Map(users.map((u) => [u.id, `${u.first_name} ${u.last_name}`]));
   const result = [];
   for (const d of drafts) {
-    const reviewers = await reviewersOf(ctx.db, d.document_id);
-    if (reviewers.includes(ctx.user.id)) result.push({ document_id: d.document_id, title: JSON.parse(d.snapshot_json).title, author: await userName(ctx.db, d.author_id), submitted_at: d.submitted_at });
+    const reviewers = await reviewersOf(ctx, d.document_id, users);
+    if (reviewers.includes(ctx.user.id)) {
+      result.push({ document_id: d.document_id, title: JSON.parse(d.snapshot_json).title, author: d.author_id ? { id: d.author_id, name: names.get(d.author_id) || "Someone" } : null, submitted_at: d.submitted_at });
+    }
   }
   return result;
 }

@@ -248,6 +248,10 @@ async function startSession() {
   shell = buildShell();
   renderCount = 0;
   await route();
+  // Once the first page is shown, fetch the editor library in the background,
+  // so opening a document doesn't wait for it.
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+  idle(() => import("./editor/setup.js").catch(() => {}));
 }
 
 function showLogin(options = {}) {

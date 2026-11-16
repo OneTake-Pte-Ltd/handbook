@@ -7,8 +7,8 @@ import { loadAccessData, mandatoryByUser } from "./permissions.js";
 
 // Progress of one user on every document: Map(docId -> { total, done, completed_at }).
 // A completion is valid if it happened at or after the last major revision.
-export async function progressFor(db, userId) {
-  const rows = await db.all(
+export function progressQuery(userId) {
+  return [
     `SELECT s.document_id AS document_id,
             COUNT(*) AS total,
             SUM(CASE WHEN c.completed_at IS NOT NULL
@@ -21,9 +21,17 @@ export async function progressFor(db, userId) {
        JOIN documents d ON d.id = s.document_id
        LEFT JOIN step_completions c ON c.step_id = s.id AND c.user_id = ?
       GROUP BY s.document_id`,
-    userId,
-  );
+    [userId],
+  ];
+}
+
+export function progressFromRows(rows) {
   return new Map(rows.map((r) => [r.document_id, { total: Number(r.total), done: Number(r.done || 0), completed_at: r.completed_at || null }]));
+}
+
+export async function progressFor(db, userId) {
+  const [sql, args] = progressQuery(userId);
+  return progressFromRows(await db.all(sql, ...args));
 }
 
 export function progressStatus(progress) {
@@ -33,9 +41,10 @@ export function progressStatus(progress) {
 }
 
 // Completion rate for many users: Map(userId -> { completed, total }).
-export async function completionRates(db, users) {
+// Pass `data` (the request's access data) when available to skip a round trip.
+export async function completionRates(db, users, data = null) {
   if (!users.length) return new Map();
-  const data = await loadAccessData(db);
+  data = data || (await loadAccessData(db));
   const mandatory = mandatoryByUser(data, users);
   const totals = new Map((await db.all("SELECT document_id, COUNT(*) AS n FROM steps GROUP BY document_id")).map((r) => [r.document_id, Number(r.n)]));
   const valid = await db.all(

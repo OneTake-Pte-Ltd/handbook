@@ -24,9 +24,9 @@ import {
   timingSafeEqual,
   verifyPassword,
 } from "./crypto.js";
-import { getSettings, setSettings } from "./settings.js";
+import { getSettings, setSettings, settingsFromRows } from "./settings.js";
 import { LATEST_VERSION } from "./migrations.js";
-import { accessFor } from "./permissions.js";
+import { ACCESS_QUERIES, accessDataFromRows, accessFor } from "./permissions.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_DAYS = 30;
@@ -73,17 +73,24 @@ function bearerToken(request) {
   return match ? match[1] : null;
 }
 
-// Returns the logged-in user for a request, or throws 401.
-export async function authenticate(db, request) {
+// Returns the logged-in user for a request, or throws 401. The session check
+// and the access data (documents, grants, departments) are read together in
+// one round trip, and kept on ctx for the rest of the request.
+export async function authenticate(ctx) {
+  const { db, request } = ctx;
   const token = bearerToken(request);
   if (!token) throw unauthorized();
   const tokenHash = await sha256Hex(token);
-  const row = await db.first(
-    `SELECT s.expires_at AS session_expires_at, u.*
-       FROM sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = ?`,
-    tokenHash,
-  );
+  const [sessionRows, ...accessRows] = await db.many([
+    [
+      `SELECT s.expires_at AS session_expires_at, u.*
+         FROM sessions s JOIN users u ON u.id = s.user_id
+        WHERE s.token_hash = ?`,
+      [tokenHash],
+    ],
+    ...ACCESS_QUERIES,
+  ]);
+  const row = sessionRows[0];
   const now = Date.now();
   if (!row || Date.parse(row.session_expires_at) <= now || !row.is_active) {
     if (row) await db.run("DELETE FROM sessions WHERE token_hash = ?", tokenHash);
@@ -96,6 +103,11 @@ export async function authenticate(db, request) {
   }
   const { session_expires_at, ...user } = row;
   user.token_hash = tokenHash;
+  ctx.accessData = accessDataFromRows(accessRows);
+  ctx.peopleAccess = {
+    isAdmin: Boolean(user.is_admin),
+    leads: new Set(ctx.accessData.memberships.filter((m) => m.user_id === user.id && m.is_leader).map((m) => m.department_id)),
+  };
   return user;
 }
 
@@ -275,15 +287,18 @@ export async function handleChangePassword({ db, request, user }) {
 }
 
 // The departments of a user, with the automatic Everyone department first.
-export async function userDepartments(db, user) {
-  const rows = await db.all(
+function departmentsQuery(userId) {
+  return [
     `SELECT d.id, d.name, d.is_system, COALESCE(m.is_leader, 0) AS is_leader
        FROM departments d
        LEFT JOIN department_members m ON m.department_id = d.id AND m.user_id = ?
       WHERE d.is_system = 1 OR m.user_id IS NOT NULL
       ORDER BY d.is_system DESC, d.position, d.name`,
-    user.id,
-  );
+    [userId],
+  ];
+}
+
+function departmentsFromRows(rows) {
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
@@ -292,11 +307,17 @@ export async function userDepartments(db, user) {
   }));
 }
 
+export async function userDepartments(db, user) {
+  const [sql, args] = departmentsQuery(user.id);
+  return departmentsFromRows(await db.all(sql, ...args));
+}
+
 // GET /api/me
 export async function handleMe(ctx) {
   const { db, user } = ctx;
-  const departments = await userDepartments(db, user);
-  const settings = await getSettings(db);
+  const [departmentRows, settingRows] = await db.many([departmentsQuery(user.id), ["SELECT key, value FROM settings", []]]);
+  const departments = departmentsFromRows(departmentRows);
+  const settings = settingsFromRows(settingRows);
   const access = await accessFor(ctx);
   return json({
     can_edit: access.canEditAnything,

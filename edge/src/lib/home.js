@@ -3,7 +3,7 @@
 import { badRequest, json, noContent, readJson } from "./http.js";
 import { accessFor, atLeast } from "./permissions.js";
 import { requireAdmin } from "./people.js";
-import { progressFor, progressStatus } from "./progress.js";
+import { progressFromRows, progressQuery, progressStatus } from "./progress.js";
 import { draftsToReview } from "./drafts.js";
 import { rebuildStatements, searchSteps } from "./search.js";
 
@@ -56,14 +56,18 @@ function readingMinutes(words) {
 // GET /api/home
 export async function handleHome(ctx) {
   const access = await accessFor(ctx);
-  const [documents, progress, wordRows] = await Promise.all([
-    ctx.db.all(
+  // One round trip for the whole page (plus one only if reviews are waiting).
+  const [documents, progressRows, wordRows, submitted] = await ctx.db.many([
+    [
       `SELECT d.id, d.title, d.description, d.updated_at, d.published_at, d.last_major_revision_at, c.name AS category_name, c.emoji AS category_emoji
          FROM documents d JOIN categories c ON c.id = d.category_id WHERE d.is_published = 1`,
-    ),
-    progressFor(ctx.db, ctx.user.id),
-    ctx.db.all("SELECT document_id, COUNT(*) AS steps, SUM(LENGTH(content_text) - LENGTH(REPLACE(content_text, ' ', '')) + 1) AS words FROM steps GROUP BY document_id"),
+      [],
+    ],
+    progressQuery(ctx.user.id),
+    ["SELECT document_id, COUNT(*) AS steps, SUM(LENGTH(content_text) - LENGTH(REPLACE(content_text, ' ', '')) + 1) AS words FROM steps GROUP BY document_id", []],
+    ["SELECT COUNT(*) AS n FROM drafts WHERE status = 'submitted'", []],
   ]);
+  const progress = progressFromRows(progressRows);
   const words = new Map(wordRows.map((r) => [r.document_id, { steps: Number(r.steps), words: Number(r.words || 0) }]));
   const visible = documents.filter((d) => atLeast(access.level(d.id), "view"));
   const card = (d) => ({
@@ -87,7 +91,7 @@ export async function handleHome(ctx) {
     requires_completion: mandatory.filter((d) => d.progress.status !== "completed"),
     completion: { completed, total: mandatory.length },
     recently_updated: recent,
-    waiting_for_review: await draftsToReview(ctx),
+    waiting_for_review: Number(submitted[0].n) ? await draftsToReview(ctx) : [],
   });
 }
 
@@ -96,13 +100,17 @@ const DOCUMENT_TYPES = new Set(["review_requested", "draft_approved", "draft_rej
 // GET /api/notifications
 export async function handleNotifications(ctx) {
   const countOnly = ctx.url.searchParams.get("count") === "1";
-  const unread = Number(await ctx.db.value("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL", ctx.user.id));
-  if (countOnly) return json({ unread_count: unread });
-  const rows = await ctx.db.all("SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 50", ctx.user.id);
-  const [users, departments] = await Promise.all([
-    ctx.db.all("SELECT id, first_name, last_name FROM users"),
-    ctx.db.all("SELECT id, name FROM departments"),
+  if (countOnly) {
+    const unread = Number(await ctx.db.value("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND read_at IS NULL", ctx.user.id));
+    return json({ unread_count: unread });
+  }
+  const [countRows, rows, users, departments] = await ctx.db.many([
+    ["SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL", [ctx.user.id]],
+    ["SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC LIMIT 50", [ctx.user.id]],
+    ["SELECT id, first_name, last_name FROM users", []],
+    ["SELECT id, name FROM departments", []],
   ]);
+  const unread = Number(countRows[0].n);
   const userName = new Map(users.map((u) => [u.id, `${u.first_name} ${u.last_name}`]));
   const departmentName = new Map(departments.map((d) => [d.id, d.name]));
   const access = await accessFor(ctx);

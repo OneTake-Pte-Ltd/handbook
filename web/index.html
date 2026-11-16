@@ -67,6 +67,23 @@
         }
       }
     </script>
+    <!-- Fetch the app's own modules in parallel instead of one import at a time. -->
+    <link rel="modulepreload" href="js/app.js" />
+    <link rel="modulepreload" href="js/api.js" />
+    <link rel="modulepreload" href="js/state.js" />
+    <link rel="modulepreload" href="js/sidebar.js" />
+    <link rel="modulepreload" href="js/search-box.js" />
+    <link rel="modulepreload" href="js/notifications.js" />
+    <link rel="modulepreload" href="js/lib/dom.js" />
+    <link rel="modulepreload" href="js/lib/icons.js" />
+    <link rel="modulepreload" href="js/lib/format.js" />
+    <link rel="modulepreload" href="js/lib/marks.js" />
+    <link rel="modulepreload" href="js/lib/sortable.js" />
+    <link rel="modulepreload" href="js/lib/emoji.js" />
+    <link rel="modulepreload" href="js/views/login.js" />
+    <link rel="modulepreload" href="js/views/password.js" />
+    <link rel="modulepreload" href="js/views/access.js" />
+    <link rel="modulepreload" href="js/views/home.js" />
     <script type="module" src="js/app.js"></script>
   </head>
   <body>
