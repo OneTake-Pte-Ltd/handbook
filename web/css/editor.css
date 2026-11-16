@@ -657,3 +657,113 @@
     flex-shrink: 0;
   }
 }
+
+/* AI writer */
+
+.step-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.step-title-row .step-title-input {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.writer-chooser {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.writer-chooser[hidden],
+.editor-area.is-choosing .toolbar-wrap,
+.editor-area.is-choosing .editor-host {
+  display: none;
+}
+
+.writer-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.writer-choice:hover,
+.writer-choice:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-softer);
+}
+
+.writer-choice strong {
+  font-size: var(--text-base);
+}
+
+.dialog.dialog--wide {
+  width: min(860px, calc(100vw - 24px));
+}
+
+.writer-types {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.writer-type {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.writer-type:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-softer);
+}
+
+.writer-type > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.writer-draft {
+  width: 100%;
+  resize: vertical;
+  min-height: 200px;
+}
+
+.writer-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.writer-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.writer-preview__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-base);
+}

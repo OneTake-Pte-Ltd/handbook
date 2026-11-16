@@ -2,7 +2,7 @@
 
 A web app for company handbooks (SOPs) and team training. One frontend, hosted on GitHub Pages, serves every company. Each company runs its own backend on Bunny: one edge script, one Bunny Database and one Storage zone.
 
-This README covers what is built so far (milestones 1 to 7: foundations, people, content and permissions, CSV import, editor and review, search, home page and notifications, reporting). It will become the full setup guide in milestone 9.
+This README covers what is built so far (milestones 1 to 8: foundations, people, content and permissions, CSV import, editor and review, search, home page and notifications, reporting, AI writer and assistant). It will become the full setup guide in milestone 9.
 
 ## How it fits together
 
@@ -13,7 +13,7 @@ Browser (GitHub Pages, static files in web/)
 Bunny edge script (one per company, built from edge/src)
    ├── Bunny Database (one per company)
    ├── Bunny Storage zone + pull zone (milestone 5)
-   └── Anthropic Messages API (milestone 8)
+   └── AI endpoint set in Settings: Anthropic-compatible or OpenAI-compatible
 ```
 
 People log in with three things: the **workspace URL** (the address of their company's edge script, for example `https://police.academy.onetake.ai`), their email and their password. Admins can share a link that fills in the workspace URL:

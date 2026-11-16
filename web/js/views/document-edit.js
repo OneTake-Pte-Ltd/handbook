@@ -208,6 +208,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   const { createEditor } = await import("../editor/setup.js");
   const { createBubbleMenu, createToolbar } = await import("../editor/toolbar.js");
   const { createImageImporter, uploadImageFiles } = await import("../editor/image-import.js");
+  const { openWriter } = await import("../editor/writer.js");
   const permissions = state.permissions;
   let draft = state.draft;
   let updatedAt = draft ? draft.updated_at : null;
@@ -445,6 +446,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
     renderStepList();
     history.replaceState(null, "", `#/doc/${doc.id}/step/${step.key}`);
     toolbar.update();
+    updateChooser();
   }
 
   function addStep(after) {
@@ -672,9 +674,52 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
     }
   }
 
+  // AI writer: empty steps offer it next to the editor; other steps have
+  // "Rewrite with the AI writer", pre-filled with the step's text.
+  const aiOn = () => Boolean(session.me.workspace.ai_enabled);
+  const chooserDismissed = new Set();
+  const writeButton = h("button", { class: "writer-choice", type: "button" }, icon("sparkle"), h("strong", {}, "Write with the AI writer"), h("span", { class: "small muted" }, "Paste notes, a transcript or bullet points; get a structured SOP, policy or meeting recap."));
+  const editorChoice = h("button", { class: "writer-choice", type: "button" }, icon("edit"), h("strong", {}, "Use the editor"), h("span", { class: "small muted" }, "Write or paste the content yourself."));
+  const chooser = h("div", { class: "writer-chooser" }, writeButton, editorChoice);
+  const rewriteButton = h("button", { class: "button button--ghost", type: "button" }, icon("sparkle"), "Rewrite with the AI writer");
+  const showWriter = (initialText) => {
+    if (conflict) return toast("Resolve the conflict with the other editor first.", { kind: "error" });
+    openWriter({ documentId: doc.id, initialText, onInsert: insertWritten });
+  };
+  writeButton.addEventListener("click", () => showWriter(""));
+  rewriteButton.addEventListener("click", () => showWriter(editor.getText({ blockSeparator: "\n\n" })));
+  editorChoice.addEventListener("click", () => {
+    chooserDismissed.add(snapshot.steps[index].key);
+    updateChooser();
+    editor.commands.focus();
+  });
+  function updateChooser() {
+    const empty = editor.isEmpty;
+    const choosing = aiOn() && empty && !chooserDismissed.has(snapshot.steps[index].key);
+    editorArea.classList.toggle("is-choosing", choosing);
+    chooser.hidden = !choosing;
+    rewriteButton.hidden = !aiOn() || empty;
+  }
+  // The writer's result: the first step replaces this one, the others follow
+  // it; an empty title or description is filled. Only the draft changes.
+  function insertWritten(result) {
+    sync();
+    const [first, ...rest] = result.steps;
+    const current = snapshot.steps[index];
+    current.title = first.title;
+    current.content_json = first.content_json;
+    snapshot.steps.splice(index + 1, 0, ...rest.map((st) => ({ id: null, key: newKey(), title: st.title, content_json: st.content_json })));
+    if (!snapshot.title.trim() && result.title) titleInput.value = snapshot.title = result.title;
+    if (!(snapshot.description || "").trim() && result.description) descriptionInput.value = snapshot.description = result.description;
+    chooserDismissed.add(current.key);
+    changed();
+    selectStep(index, { syncFirst: false });
+    toast(rest.length ? `Inserted ${result.steps.length} steps. Review them before publishing.` : "Inserted. Review it before publishing.");
+  }
+
   // Layout
   const editorHost = h("div", { class: "editor-host" });
-  const editorArea = h("div", { class: "editor-area" }, editorHost);
+  const editorArea = h("div", { class: "editor-area" }, chooser, editorHost);
   const page = h(
     "div",
     { class: "page page--document" },
@@ -692,7 +737,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
       { class: "doc-layout" },
       stepsResizeHandle(),
       h("nav", { class: "step-list", "aria-label": "Steps" }, h("div", { class: "step-select" }, stepSelect), stepList, h("div", { style: "padding:8px" }, h("button", { class: "tree__add", type: "button", onclick: () => addStep(snapshot.steps.length - 1) }, icon("plus"), "Add a step"))),
-      h("div", { class: "step-content step-content--editing" }, h("label", { class: "visually-hidden", for: "step-title-input" }, "Step title"), stepTitle, editorArea),
+      h("div", { class: "step-content step-content--editing" }, h("label", { class: "visually-hidden", for: "step-title-input" }, "Step title"), h("div", { class: "step-title-row" }, stepTitle, rewriteButton), editorArea),
     ),
   );
   stepTitle.id = "step-title-input";
@@ -726,6 +771,12 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   editor.on("transaction", () => toolbar.update());
   stepTitle.value = snapshot.steps[index].title;
   renderStepList();
+  updateChooser();
+  editor.on("update", () => {
+    if (!editor.isEmpty) chooserDismissed.add(snapshot.steps[index].key);
+    updateChooser();
+  });
+  window.addEventListener("handbook:ai-changed", () => editorArea.isConnected && updateChooser());
 
   // Ctrl+S saves now.
   page.addEventListener("keydown", (e) => {

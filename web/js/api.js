@@ -163,3 +163,56 @@ export async function uploadFile(blob, name, kind = "image") {
 export function loginLink() {
   return `${location.origin}${location.pathname}?workspace=${encodeURIComponent(currentWorkspace())}`;
 }
+
+// POST that answers with Server-Sent Events (the AI features). onEvent(name,
+// data) runs for each event; resolves when the stream ends. An "error" event
+// rejects with its message. `signal` stops it.
+export async function apiStream(path, body, onEvent, { signal } = {}) {
+  const base = currentWorkspace();
+  let response;
+  try {
+    response = await fetch(`${base}/api${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken(base)}`, "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ ...body, site: location.href.split("#")[0] }),
+      cache: "no-store",
+      signal,
+    });
+  } catch (error) {
+    if (signal && signal.aborted) throw error;
+    throw new ApiError(0, "We couldn't reach the workspace. Check your connection and the workspace URL.");
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    if (response.status === 401) {
+      setToken(base, null);
+      window.dispatchEvent(new CustomEvent("handbook:logged-out", { detail: data && data.error }));
+    }
+    throw new ApiError(response.status, (data && data.error) || `The workspace answered with an error (${response.status}).`, data && data.code);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let failure = null;
+  for (;;) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    let cut;
+    while ((cut = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      let event = "message";
+      let data = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) data += line.slice(5).trim();
+      }
+      if (!data) continue;
+      const parsed = JSON.parse(data);
+      if (event === "error") failure = new ApiError(400, parsed.error || "Something went wrong.", parsed.code);
+      else onEvent(event, parsed);
+    }
+    if (done) break;
+  }
+  if (failure) throw failure;
+}
