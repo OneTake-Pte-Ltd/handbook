@@ -218,7 +218,7 @@ export function createSidebar({ toolbar, body }) {
     if (edit && category.can_create) {
       list.append(h("li", {}, h("button", { class: "tree__add", type: "button", onclick: () => newDocumentDialog(category) }, icon("plus"), "New document")));
     }
-    if (edit && category.can_create) sortable(list, { handle: ".drag-handle", item: "li[data-id]", onEnd: (order) => reorder("document", order) });
+    if (edit && category.can_create) sortable(list, { handle: ".drag-handle", item: "li[data-id]", onEnd: (order) => reorder("document", order.map(Number)) });
     return h(
       "li",
       { class: "tree__category", dataset: { id: String(category.id) } },
@@ -241,7 +241,7 @@ export function createSidebar({ toolbar, body }) {
     for (const category of space.categories) list.append(categoryItem(space, category, space.categories));
     if (edit && admin) {
       list.append(h("li", {}, h("button", { class: "tree__add", type: "button", onclick: () => categoryDialog({ space }) }, icon("plus"), "New category")));
-      sortable(list, { handle: ".drag-handle", item: "li.tree__category", onEnd: (order) => reorder("category", order) });
+      sortable(list, { handle: ".drag-handle", item: "li.tree__category", onEnd: (order) => reorder("category", order.map(Number)) });
     }
     return h(
       "li",
@@ -309,7 +309,7 @@ export function createSidebar({ toolbar, body }) {
       );
     } else {
       const list = h("ul", { class: "tree" }, tree.spaces.map((s) => spaceItem(s, tree.spaces)));
-      if (edit && tree.can_manage) sortable(list, { handle: ".drag-handle", item: "li.tree__space", onEnd: (order) => reorder("space", order) });
+      if (edit && tree.can_manage) sortable(list, { handle: ".drag-handle", item: "li.tree__space", onEnd: (order) => reorder("space", order.map(Number)) });
       clear(body, list);
     }
     if (edit && tree.can_manage) body.append(h("button", { class: "tree__add", type: "button", onclick: () => spaceDialog(null) }, icon("plus"), "New space"));

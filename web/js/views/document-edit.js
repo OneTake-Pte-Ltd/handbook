@@ -222,6 +222,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
   }
   function changed() {
     dirty = true;
+    primaryAction.hidden = false;
     clearTimeout(timer);
     if (conflict) return; // waiting for the user to choose which version to keep
     setStatus("Unsaved changes");
@@ -351,8 +352,13 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
 
   // Actions
   const actions = [];
-  if (permissions.can_publish) actions.push(h("button", { class: "button button--primary", type: "button", onclick: publishDialog }, doc.is_published ? "Publish changes" : "Publish"));
-  else actions.push(h("button", { class: "button button--primary", type: "button", onclick: submitDialog }, "Submit for review"));
+  // A published document without a draft has nothing to publish or submit:
+  // the button appears with the first change.
+  const primaryAction = permissions.can_publish
+    ? h("button", { class: "button button--primary", type: "button", onclick: publishDialog }, doc.is_published ? "Publish changes" : "Publish")
+    : h("button", { class: "button button--primary", type: "button", onclick: submitDialog }, "Submit for review");
+  primaryAction.hidden = Boolean(doc.is_published && !draft);
+  actions.push(primaryAction);
   const more = [];
   if (draft) more.push({ label: "Discard draft", danger: true, onClick: discard });
   if (isAdmin() || isLeader()) more.push({ label: "Access", onClick: () => openAccessPanel({ type: "document", id: doc.id, name: snapshot.title }) });

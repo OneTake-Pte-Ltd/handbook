@@ -1330,12 +1330,24 @@ fieldset.field legend {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  /* clip, not hidden: hidden would stop the step list and the editor toolbar
+     from staying in view while scrolling. */
+  overflow: clip;
 }
 
 .step-list {
+  position: sticky;
+  top: var(--topbar-height);
+  align-self: start;
+  max-height: calc(100vh - var(--topbar-height));
+  overflow-y: auto;
+  margin-right: -1px;
   border-right: 1px solid var(--border);
   background: var(--surface);
+}
+
+.step-content {
+  border-left: 1px solid var(--border);
 }
 
 .step-list ol {
@@ -1443,7 +1455,15 @@ fieldset.field legend {
   }
 
   .step-list {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    margin-right: 0;
     border-right: 0;
+  }
+
+  .step-content {
+    border-left: 0;
   }
 
   .step-select {
