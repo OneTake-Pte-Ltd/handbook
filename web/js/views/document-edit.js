@@ -435,8 +435,9 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
     changed();
   }
 
-  function selectStep(i) {
-    sync();
+  // syncFirst: false when the step in the editor no longer exists (deleted).
+  function selectStep(i, { syncFirst = true } = {}) {
+    if (syncFirst) sync();
     index = i;
     const step = snapshot.steps[i];
     stepTitle.value = step.title;
@@ -469,7 +470,14 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
     sync();
     snapshot.steps.splice(i, 1);
     changed();
-    selectStep(Math.min(i, snapshot.steps.length - 1));
+    if (i === index) {
+      // The step on screen was deleted: show its neighbour without copying the
+      // deleted content into it.
+      selectStep(Math.min(i, snapshot.steps.length - 1), { syncFirst: false });
+    } else {
+      if (i < index) index -= 1;
+      renderStepList();
+    }
   }
 
   async function publishDialog() {

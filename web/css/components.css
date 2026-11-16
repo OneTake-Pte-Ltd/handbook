@@ -1831,6 +1831,12 @@ mark {
 .recent-list a {
   font-weight: 600;
   flex: 1 1 100%;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.recent-list a:hover {
+  text-decoration: underline;
 }
 
 /* Notifications */

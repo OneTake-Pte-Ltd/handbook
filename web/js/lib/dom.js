@@ -213,6 +213,32 @@ export function popupMenu(items, { label = "More actions", className = "small-ic
     menu.hidden = true;
     button.setAttribute("aria-expanded", "false");
     document.removeEventListener("click", outside, true);
+    window.removeEventListener("scroll", onScroll, true);
+    window.removeEventListener("resize", close);
+  };
+  // The menu follows its button when the page or a list scrolls, and closes
+  // once the button is out of view.
+  const onScroll = (event) => {
+    if (menu.contains(event.target)) return;
+    const rect = button.getBoundingClientRect();
+    if (rect.bottom < 0 || rect.top > window.innerHeight || !rect.width) close();
+    else place();
+  };
+  // The menu floats above everything (position: fixed), so lists that scroll
+  // or clip can't hide it; it opens upwards when there is no room below.
+  const place = () => {
+    const rect = button.getBoundingClientRect();
+    menu.style.position = "fixed";
+    menu.style.right = "auto";
+    menu.style.top = "0px";
+    menu.style.left = "0px";
+    const width = menu.offsetWidth;
+    const height = menu.offsetHeight;
+    const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+    let top = rect.bottom + 6;
+    if (top + height > window.innerHeight - 8 && rect.top - height - 6 >= 8) top = rect.top - height - 6;
+    menu.style.left = `${left}px`;
+    menu.style.top = `${Math.max(8, top)}px`;
   };
   const outside = (event) => {
     if (!wrap.contains(event.target)) close();
@@ -246,9 +272,12 @@ export function popupMenu(items, { label = "More actions", className = "small-ic
         ),
     );
     menu.hidden = false;
+    place();
     button.setAttribute("aria-expanded", "true");
-    menu.querySelector(".menu__item:not([disabled])")?.focus();
+    menu.querySelector(".menu__item:not([disabled])")?.focus({ preventScroll: true });
     document.addEventListener("click", outside, true);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", close);
   });
   menu.addEventListener("keydown", (event) => {
     const options = [...menu.querySelectorAll(".menu__item:not([disabled])")];

@@ -54,7 +54,7 @@ function documentCard(d) {
     { class: "doc-card", href: `#/doc/${d.id}` },
     h("span", { class: "doc-card__category" }, `${d.category.emoji ? `${d.category.emoji} ` : ""}${d.category.name}`),
     h("strong", { class: "doc-card__title" }, d.title),
-    h("span", { class: "doc-card__description" }, d.description || "This document has no description."),
+    d.description ? h("span", { class: "doc-card__description" }, d.description) : null,
     h(
       "span",
       { class: "doc-card__footer" },
