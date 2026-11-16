@@ -196,10 +196,10 @@ test("settings are admin-only and never return the API key", async () => {
   const token = await setupAdmin(t);
   const patch = await t.call("PATCH", "/api/settings", {
     token,
-    body: { workspace_name: "OneTake AI", anthropic_api_key: "sk-ant-secret-abcd", logo_url: "https://example.com/logo.png" },
+    body: { workspace_name: "OneTake AI", ai_api_key: "sk-ant-secret-abcd", logo_url: "https://example.com/logo.png" },
   });
   assert.equal(patch.status, 200);
-  assert.equal(patch.body.anthropic_key_hint, "abcd");
+  assert.equal(patch.body.ai_key_hint, "abcd");
   assert.equal(JSON.stringify(patch.body).includes("sk-ant-secret"), false);
 
   const badUrl = await t.call("PATCH", "/api/settings", { token, body: { logo_url: "http://example.com/x.png" } });

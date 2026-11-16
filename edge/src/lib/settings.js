@@ -2,14 +2,25 @@
 
 import { badRequest, optionalString } from "./http.js";
 
+// Brand rules every AI text follows; admins edit them in Settings.
+export const DEFAULT_BRAND_RULES = `- Never use em dashes; use a semicolon instead.
+- The company is "OneTake AI". The product, and the AI agent users talk to, is "OneTake". Never write "the AI" to refer to it.
+- OneTake is "an AI agent", never "a tool", "a platform" or "a software".
+- No filler such as "To be honest" or "The truth is"; state facts directly.
+- Say "your domain or industry", not "your niche".`;
+
 export const SETTING_DEFAULTS = {
   workspace_name: "Handbook",
   logo_url: "",
   banner_url: "",
-  anthropic_api_key: "",
+  // One AI endpoint for the writer, the assistant and its search queries.
+  ai_provider: "anthropic", // "anthropic" or "openai" (any compatible endpoint)
+  ai_base_url: "", // empty: https://api.anthropic.com or https://api.openai.com/v1
+  ai_api_key: "",
   writer_model: "claude-sonnet-5-5",
   assistant_model: "claude-sonnet-5-5",
   assistant_query_model: "claude-haiku-5-5",
+  brand_rules: DEFAULT_BRAND_RULES,
 };
 
 export function settingsFromRows(rows) {
@@ -24,12 +35,17 @@ export async function getSettings(db) {
 
 // What admins see in Settings: everything except the API key itself.
 export function settingsForAdmin(settings) {
-  const { anthropic_api_key, ...rest } = settings;
+  const { ai_api_key, ...rest } = settings;
   return {
     ...rest,
-    anthropic_key_set: Boolean(anthropic_api_key),
-    anthropic_key_hint: anthropic_api_key ? anthropic_api_key.slice(-4) : "",
+    ai_key_set: Boolean(ai_api_key),
+    ai_key_hint: ai_api_key ? ai_api_key.slice(-4) : "",
   };
+}
+
+// The AI features show once a key and the three models are set.
+export function aiEnabled(settings) {
+  return Boolean(settings.ai_api_key && settings.writer_model && settings.assistant_model && settings.assistant_query_model);
 }
 
 export async function setSettings(db, values) {
@@ -52,7 +68,9 @@ function checkUrl(value, label) {
   return url.toString();
 }
 
-const MODEL_PATTERN = /^[a-z0-9][a-z0-9.\-]{1,80}$/;
+// Model names from Anthropic, OpenAI and compatible services (for example
+// "claude-sonnet-5-5", "gpt-5.1", "meta-llama/Llama-3.3-70B-Instruct:free").
+const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:\/@-]{0,119}$/;
 
 // Validates a PATCH /settings body and returns only the keys to change.
 export function parseSettingsPatch(body) {
@@ -64,15 +82,27 @@ export function parseSettingsPatch(body) {
   }
   if ("logo_url" in body) changes.logo_url = checkUrl(optionalString(body, "logo_url", "Logo URL", { max: 1000 }), "Logo URL");
   if ("banner_url" in body) changes.banner_url = checkUrl(optionalString(body, "banner_url", "Banner image URL", { max: 1000 }), "Banner image URL");
-  if ("anthropic_api_key" in body) {
-    changes.anthropic_api_key = optionalString(body, "anthropic_api_key", "Anthropic API key", { max: 300 });
+  if ("ai_provider" in body) {
+    if (!["anthropic", "openai"].includes(body.ai_provider)) throw badRequest("Choose an Anthropic-compatible or an OpenAI-compatible endpoint.");
+    changes.ai_provider = body.ai_provider;
+  }
+  if ("ai_base_url" in body) {
+    const value = optionalString(body, "ai_base_url", "Endpoint URL", { max: 500 });
+    // http://localhost is accepted for local testing with the dev server.
+    changes.ai_base_url = (/^http:\/\/localhost[:/]/.test(value) ? value : checkUrl(value, "Endpoint URL")).replace(/\/+$/, "");
+  }
+  if ("ai_api_key" in body) {
+    const key = optionalString(body, "ai_api_key", "API key", { max: 500 });
+    if (/\s/.test(key)) throw badRequest("The API key can't contain spaces.");
+    changes.ai_api_key = key;
   }
   for (const key of ["writer_model", "assistant_model", "assistant_query_model"]) {
     if (key in body) {
-      const value = optionalString(body, key, "Model name", { max: 80 });
-      if (!MODEL_PATTERN.test(value)) throw badRequest("Model names look like claude-sonnet-5-5.");
+      const value = optionalString(body, key, "Model name", { max: 120 });
+      if (value && !MODEL_PATTERN.test(value)) throw badRequest(`"${value}" doesn't look like a model name.`);
       changes[key] = value;
     }
   }
+  if ("brand_rules" in body) changes.brand_rules = optionalString(body, "brand_rules", "Brand rules", { max: 5000 });
   return changes;
 }
