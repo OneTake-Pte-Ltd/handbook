@@ -2003,3 +2003,7 @@ mark {
     display: flex;
   }
 }
+
+.step-actions__next-doc {
+  display: contents;
+}

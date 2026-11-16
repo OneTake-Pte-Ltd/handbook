@@ -6,7 +6,8 @@ import { api } from "../api.js";
 import { clear, h, icon, popupMenu, setTitle, toast } from "../lib/dom.js";
 import { longDateTime, relativeTime } from "../lib/format.js";
 import { completionMark, statusLabel, stepMark } from "../lib/marks.js";
-import { contentChanged, isEditMode } from "../state.js";
+import { nextRequiredDocument } from "../lib/next-document.js";
+import { contentChanged, isEditMode, session, setEditMode } from "../state.js";
 
 export function minutesToRead(steps) {
   const words = steps.reduce((n, s) => n + (s.content_text || "").split(/\s+/).filter(Boolean).length, 0);
@@ -67,6 +68,7 @@ async function renderView(main, data, stepId, path) {
     { class: "doc-header__badges" },
     data.mandatory ? h("span", { class: "mandatory-label" }, "Mandatory") : null,
     doc.is_published ? h("span", { class: "status-badge" }, completionMark(data.progress), statusLabel(data.progress)) : h("span", { class: "badge" }, "Not published"),
+    data.permissions.can_edit && session.me.can_edit ? h("button", { class: "button", type: "button", onclick: () => setEditMode(true) }, icon("edit"), "Edit") : null,
   );
 
   const content = h("div", { class: "step-content__body" });
@@ -77,6 +79,18 @@ async function renderView(main, data, stepId, path) {
     step.completed ? [icon("check"), "Completed"] : "Mark as complete",
   );
   completeButton.addEventListener("click", () => setComplete(step, !step.completed, next));
+
+  // Once this document is completed: a link to the next mandatory document
+  // still to complete, in sidebar order.
+  const nextDocSlot = h("span", { class: "step-actions__next-doc" });
+  if (doc.is_published && data.progress.status === "completed") {
+    (session.tree ? Promise.resolve(session.tree) : api("GET", "/tree"))
+      .then((tree) => {
+        const target = nextRequiredDocument(tree, doc.id);
+        if (target) nextDocSlot.append(h("a", { class: "button button--primary", href: `#/doc/${target.id}` }, `Next required: ${target.title}`, icon("arrowRight")));
+      })
+      .catch(() => {});
+  }
 
   const list = h(
     "ol",
@@ -122,7 +136,7 @@ async function renderView(main, data, stepId, path) {
           { class: "step-content", "aria-labelledby": "step-title" },
           h("div", { class: "step-content__header" }, h("h2", { class: "step-content__title", id: "step-title" }, step.title), h("span", { class: "muted small" }, `Updated ${relativeTime(step.updated_at)}`)),
           content,
-          h("div", { class: "step-actions" }, completeButton, next ? h("a", { class: "button", href: stepUrl(next) }, "Next step", icon("arrowRight")) : null),
+          h("div", { class: "step-actions" }, completeButton, next ? h("a", { class: "button", href: stepUrl(next) }, "Next step", icon("arrowRight")) : null, nextDocSlot),
         ),
       ),
     ),

@@ -8,7 +8,7 @@ import { api } from "../api.js";
 import { alertBox, busy, clear, confirmDialog, field, h, icon, input, openDialog, popupMenu, setTitle, toast } from "../lib/dom.js";
 import { relativeTime } from "../lib/format.js";
 import { moveItem, sortable } from "../lib/sortable.js";
-import { contentChanged, isAdmin, isLeader } from "../state.js";
+import { contentChanged, isAdmin, isLeader, setEditMode } from "../state.js";
 import { openAccessPanel } from "./access.js";
 import { documentHeader } from "./document.js";
 
@@ -112,11 +112,16 @@ async function readOnlySteps(container, { snapshot, startIndex, flags, removed =
   show(Math.min(startIndex, all.length - 1));
 }
 
+// Leaves Edit mode from the document itself (the sidebar switch is easy to miss).
+function stopEditingButton() {
+  return h("button", { class: "button", type: "button", onclick: () => setEditMode(false) }, "Stop editing");
+}
+
 function renderWaiting(main, { data, state, snapshot, startIndex }) {
   const page = h(
     "div",
     { class: "page page--document" },
-    documentHeader({ title: snapshot.title, description: snapshot.description, category: data.category, badges: h("span", { class: "badge" }, "In review") }),
+    documentHeader({ title: snapshot.title, description: snapshot.description, category: data.category, badges: h("div", { class: "doc-header__badges" }, h("span", { class: "badge" }, "In review"), stopEditingButton()) }),
     h(
       "div",
       { class: "alert alert--info", style: "margin-bottom:16px" },
@@ -179,7 +184,7 @@ function renderReview(main, { data, state, snapshot, startIndex }) {
   const page = h(
     "div",
     { class: "page page--document" },
-    documentHeader({ title: snapshot.title, description: snapshot.description, category: data.category, badges: h("span", { class: "badge badge--accent" }, "Review") }),
+    documentHeader({ title: snapshot.title, description: snapshot.description, category: data.category, badges: h("div", { class: "doc-header__badges" }, h("span", { class: "badge badge--accent" }, "Review"), stopEditingButton()) }),
     h(
       "div",
       { class: "edit-bar", role: "toolbar", "aria-label": "Review" },
@@ -568,7 +573,7 @@ async function renderEditing(main, { data, state, snapshot, startIndex, category
       h("div", { class: "doc-header__meta" }, h("span", {}, "In category ", h("strong", {}, `${category.emoji ? `${category.emoji} ` : ""}${category.name}`))),
     ),
     banners.length ? h("div", { class: "form", style: "margin-bottom:16px" }, banners) : null,
-    h("div", { class: "edit-bar", role: "toolbar", "aria-label": "Document editing" }, h("strong", { class: "small" }, draft ? "Draft" : "Edit mode"), status, resolveButton, h("span", { class: "edit-bar__spacer" }), actions, more.length ? popupMenu(more, { label: "More document actions", className: "icon-button" }) : null),
+    h("div", { class: "edit-bar", role: "toolbar", "aria-label": "Document editing" }, h("strong", { class: "small" }, draft ? "Draft" : "Edit mode"), status, resolveButton, h("span", { class: "edit-bar__spacer" }), stopEditingButton(), actions, more.length ? popupMenu(more, { label: "More document actions", className: "icon-button" }) : null),
     h(
       "div",
       { class: "doc-layout" },

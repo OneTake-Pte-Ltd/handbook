@@ -176,6 +176,7 @@ export async function handleGetUser(ctx) {
     user: { ...memberSummary(target, departments), completion },
     permissions: {
       can_edit_details: manageable,
+      can_edit_photo: self || manageable,
       can_edit_email: access.isAdmin,
       can_reset_password: manageable && !self,
       can_change_status: access.isAdmin && !self,
@@ -286,7 +287,7 @@ export async function handleUpdateUser(ctx) {
     changes.role_title = optionalString(body, "role_title", "Role title", { max: 120 });
   }
   if ("avatar_url" in body) {
-    if (!self && !access.isAdmin) throw forbidden("You can only change your own photo.");
+    if (!self && !(await canManageMember(ctx, target))) throw forbidden("You can't change this member's photo.");
     const value = optionalString(body, "avatar_url", "Photo", { max: 1000 });
     // https only; http://localhost is accepted for the local dev server.
     if (value && !/^(https:\/\/|http:\/\/localhost[:/])/.test(value)) throw badRequest("The photo must be an https:// address.");

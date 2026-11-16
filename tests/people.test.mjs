@@ -163,6 +163,21 @@ test("members edit their own names and photo, but not their role title", async (
   assert.equal((await t.call("GET", "/api/users", { token: sam.token })).status, 403, "plain members don't see the list");
 });
 
+test("admins and the member's team leaders can change a member's photo; other members can't", async () => {
+  const { t, admin, dept, member } = await workspace();
+  const leader = await member("Lea", [{ id: dept.Marketing, is_leader: true }]);
+  const sam = await member("Sam", [dept.Marketing]);
+  const pat = await member("Pat", [dept.Product]);
+  const photo = { avatar_url: "https://files.example.com/sam.jpg" };
+  const byLeader = await t.call("PATCH", `/api/users/${sam.id}`, { token: leader.token, body: photo });
+  assert.equal(byLeader.status, 200);
+  assert.equal(byLeader.body.user.avatar_url, photo.avatar_url);
+  assert.equal((await t.call("PATCH", `/api/users/${sam.id}`, { token: admin, body: { avatar_url: "" } })).status, 200);
+  assert.equal((await t.call("PATCH", `/api/users/${pat.id}`, { token: leader.token, body: photo })).status, 403, "not in a department Lea leads");
+  assert.equal((await t.call("PATCH", `/api/users/${sam.id}`, { token: pat.token, body: photo })).status, 403);
+  assert.equal((await t.call("GET", `/api/users/${sam.id}`, { token: leader.token })).body.permissions.can_edit_photo, true);
+});
+
 test("departments: create, rename, delete; Everyone is protected and counts every active member", async () => {
   const { t, admin, dept, member } = await workspace();
   await member("Ann", [dept.Product]);

@@ -318,6 +318,7 @@ export function createSidebar({ toolbar, body }) {
   async function refresh() {
     try {
       tree = await api("GET", `/tree${isEditMode() ? "?mode=edit" : ""}`);
+      session.tree = tree;
       if (session.me.can_edit !== tree.can_edit) session.me.can_edit = tree.can_edit;
     } catch (e) {
       if (e.status !== 401) toast(e.message, { kind: "error" });
