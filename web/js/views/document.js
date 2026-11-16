@@ -144,7 +144,7 @@ async function renderView(main, data, stepId, path) {
           { class: "step-content", "aria-labelledby": "step-title" },
           h("div", { class: "step-content__header" }, h("h2", { class: "step-content__title", id: "step-title" }, step.title), h("span", { class: "muted small" }, `Updated ${relativeTime(step.updated_at)}`)),
           content,
-          h("div", { class: "step-actions" }, completeButton, next ? h("a", { class: "button", href: stepUrl(next) }, "Next step", icon("arrowRight")) : null, nextDocSlot),
+          h("div", { class: "step-actions" }, completeButton, h("div", { class: "step-actions__forward" }, next ? h("a", { class: "button", href: stepUrl(next) }, "Next step", icon("arrowRight")) : null, nextDocSlot)),
         ),
       ),
     ),

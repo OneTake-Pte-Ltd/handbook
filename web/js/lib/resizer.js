@@ -60,7 +60,7 @@ export function resizeHandle(name, measure) {
     apply(column, value, true);
     handle.setAttribute("aria-valuenow", String(value));
   };
-  handle.setAttribute("aria-valuenow", String(current()));
+  handle.setAttribute("aria-valuenow", String(stored(column) || column.initial));
 
   handle.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
