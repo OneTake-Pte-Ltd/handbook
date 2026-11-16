@@ -329,6 +329,8 @@ export async function handleMe(ctx) {
       logo_url: settings.logo_url,
       banner_url: settings.banner_url,
       ai_enabled: Boolean(settings.anthropic_api_key),
+      // Images outside this address are copied into storage when pasted.
+      files_url: (ctx.env.PUBLIC_FILES_URL || "").replace(/\/+$/, ""),
     },
   });
 }

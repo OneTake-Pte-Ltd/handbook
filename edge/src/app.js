@@ -30,7 +30,7 @@ import {
   handleUpdateUser,
   requireAdmin,
 } from "./lib/people.js";
-import { handleUpload } from "./lib/storage.js";
+import { handleImportImage, handleUpload } from "./lib/storage.js";
 import {
   handleCompleteStep,
   handleCreateCategory,
@@ -62,6 +62,7 @@ import {
   handleRejectDraft,
   handleSaveDraft,
   handleSubmitDraft,
+  handleMoveStep,
 } from "./lib/drafts.js";
 
 async function handleGetSettings({ db, user }) {
@@ -100,6 +101,7 @@ const ROUTES = [
   ["PUT", "/api/departments/:id/members/:userId", handlePutMember],
   ["DELETE", "/api/departments/:id/members/:userId", handleRemoveMember],
   ["POST", "/api/files", handleUpload],
+  ["POST", "/api/files/import-url", handleImportImage],
   ["GET", "/api/embed-preview", handleEmbedPreview],
   ["GET", "/api/search", handleSearch],
   ["POST", "/api/search/rebuild", handleRebuildSearch],
@@ -119,6 +121,7 @@ const ROUTES = [
   ["PUT", "/api/documents/:id/draft", handleSaveDraft],
   ["DELETE", "/api/documents/:id/draft", handleDiscardDraft],
   ["POST", "/api/documents/:id/draft/submit", handleSubmitDraft],
+  ["POST", "/api/documents/:id/draft/move-step", handleMoveStep],
   ["POST", "/api/documents/:id/draft/publish", handlePublishDraft],
   ["POST", "/api/documents/:id/draft/approve", handleApproveDraft],
   ["POST", "/api/documents/:id/draft/reject", handleRejectDraft],

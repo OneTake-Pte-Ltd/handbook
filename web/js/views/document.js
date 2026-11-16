@@ -7,6 +7,7 @@ import { clear, h, icon, popupMenu, setTitle, toast } from "../lib/dom.js";
 import { longDateTime, relativeTime } from "../lib/format.js";
 import { completionMark, statusLabel, stepMark } from "../lib/marks.js";
 import { nextRequiredDocument } from "../lib/next-document.js";
+import { resizeHandle } from "../lib/resizer.js";
 import { contentChanged, isEditMode, session, setEditMode } from "../state.js";
 
 export function minutesToRead(steps) {
@@ -33,6 +34,12 @@ export function documentHeader({ title, description, category, steps, badges }) 
     ),
     badges,
   );
+}
+
+// Drag handle between the list of steps and the content (desktop only).
+export function stepsResizeHandle() {
+  const handle = resizeHandle("steps", () => handle.parentElement?.querySelector(".step-list")?.getBoundingClientRect().width || 0);
+  return handle;
 }
 
 export async function render(main, { path }) {
@@ -122,6 +129,7 @@ async function renderView(main, data, stepId, path) {
       h(
         "div",
         { class: "doc-layout" },
+      stepsResizeHandle(),
         h(
           "nav",
           { class: "step-list", "aria-label": "Steps" },

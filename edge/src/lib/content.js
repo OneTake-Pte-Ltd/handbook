@@ -95,7 +95,7 @@ export async function handleTree(ctx) {
   const tree = spaces
     .map((s) => ({ id: s.id, name: s.name, categories: categoriesBySpace.get(s.id) || [] }))
     .filter((s) => s.categories.length || (editMode && access.isAdmin));
-  return json({ spaces: tree, can_manage: access.isAdmin, can_edit: access.canEditAnything });
+  return json({ spaces: tree, edit_mode: editMode, can_manage: access.isAdmin, can_edit: access.canEditAnything });
 }
 
 // GET /api/documents/:id

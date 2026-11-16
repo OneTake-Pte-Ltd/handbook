@@ -64,6 +64,6 @@ test("private and local addresses are refused, including through redirects", asy
   assert.equal(isPublicHttpUrl("https://www.youtube.com/watch?v=x"), true);
   await assert.rejects(
     previewEmbed(fakeFetch({ "https://evil.example.com/": { status: 302, headers: { location: "http://169.254.169.254/" } } }), "https://evil.example.com/"),
-    /can't be previewed/,
+    /can't be opened/,
   );
 });

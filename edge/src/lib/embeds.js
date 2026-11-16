@@ -38,10 +38,13 @@ export function isPublicHttpUrl(value) {
   return true;
 }
 
-async function fetchText(fetchImpl, url, accept) {
+// Fetches a public http(s) address, following at most 3 redirects (each one
+// checked with isPublicHttpUrl), and reads at most maxBytes + 1 bytes, so a
+// caller can tell the response was too large (`truncated`).
+export async function fetchLimited(fetchImpl, url, { accept = "*/*", maxBytes = MAX_BYTES, userAgent = "HandbookEmbedPreview/1.0" } = {}) {
   let current = url;
   for (let hop = 0; hop <= 3; hop++) {
-    if (!isPublicHttpUrl(current)) throw badRequest("This address can't be previewed.");
+    if (!isPublicHttpUrl(current)) throw badRequest("This address can't be opened.");
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     let response;
@@ -49,7 +52,7 @@ async function fetchText(fetchImpl, url, accept) {
       response = await fetchImpl(current, {
         redirect: "manual",
         signal: controller.signal,
-        headers: { Accept: accept, "User-Agent": "HandbookEmbedPreview/1.0" },
+        headers: { Accept: accept, "User-Agent": userAgent },
       });
     } catch {
       clearTimeout(timer);
@@ -64,12 +67,11 @@ async function fetchText(fetchImpl, url, accept) {
       clearTimeout(timer);
       throw badRequest(`This address answered with an error (${response.status}).`);
     }
-    // Read at most MAX_BYTES.
     const reader = response.body.getReader();
     const chunks = [];
     let size = 0;
     try {
-      while (size < MAX_BYTES) {
+      while (size <= maxBytes) {
         const { done, value } = await reader.read();
         if (done) break;
         chunks.push(value);
@@ -79,16 +81,23 @@ async function fetchText(fetchImpl, url, accept) {
       clearTimeout(timer);
       reader.cancel().catch(() => {});
     }
-    const bytes = new Uint8Array(size);
+    const kept = Math.min(size, maxBytes);
+    const bytes = new Uint8Array(kept);
     let offset = 0;
     for (const c of chunks) {
-      bytes.set(c.subarray(0, Math.min(c.length, size - offset)), offset);
-      offset += c.length;
-      if (offset >= size) break;
+      if (offset >= kept) break;
+      const part = c.subarray(0, Math.min(c.length, kept - offset));
+      bytes.set(part, offset);
+      offset += part.length;
     }
-    return { text: new TextDecoder().decode(bytes), url: current };
+    return { bytes, url: current, truncated: size > maxBytes, contentType: response.headers.get("content-type") || "" };
   }
   throw badRequest("This address redirects too many times.");
+}
+
+async function fetchText(fetchImpl, url, accept) {
+  const { bytes, url: final } = await fetchLimited(fetchImpl, url, { accept });
+  return { text: new TextDecoder().decode(bytes), url: final };
 }
 
 function decodeEntities(value) {

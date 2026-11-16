@@ -95,6 +95,8 @@ export const Figure = Node.create({
         return { src: img ? img.getAttribute("src") : "", alt: img ? img.getAttribute("alt") || "" : "", caption: el.querySelector("figcaption")?.textContent || "", width: el.getAttribute("data-width") || "full" };
       },
     },
+    // Images in pasted content (they are then copied into storage).
+    { tag: "img[src]", getAttrs: (el) => ({ src: el.getAttribute("src") || "", alt: el.getAttribute("alt") || "", caption: "", width: "full" }) },
   ],
   renderHTML: ({ node }) => ["figure", { "data-figure": "", "data-width": node.attrs.width }, ["img", { src: node.attrs.src, alt: node.attrs.alt }], ["figcaption", {}, node.attrs.caption]],
   addNodeView() {
@@ -103,7 +105,9 @@ export const Figure = Node.create({
       const render = (n) => {
         dom.className = `figure figure--${n.attrs.width}`;
         dom.replaceChildren(
-          isFileUrl(n.attrs.src) ? h("img", { src: n.attrs.src, alt: n.attrs.alt, loading: "lazy" }) : h("div", { class: "muted small" }, "Image not available"),
+          isFileUrl(n.attrs.src) || /^data:image\//.test(n.attrs.src)
+            ? h("img", { src: n.attrs.src, alt: n.attrs.alt, loading: "lazy" })
+            : h("div", { class: "muted small" }, "Image not available"),
           n.attrs.caption ? h("figcaption", {}, n.attrs.caption) : null,
           blockControls(editor, [h("button", { class: "button", type: "button", onclick: () => editFigure(n) }, icon("edit"), "Alt text, caption and size")]),
         );

@@ -179,6 +179,50 @@ export async function handleSaveDraft(ctx) {
   return json({ updated_at: now, snapshot });
 }
 
+// POST /api/documents/:id/draft/move-step { step_key, target_document_id, base_updated_at }
+// Moves a step to another document through both drafts: it leaves this
+// document's draft and is appended to the other document's draft. Nothing
+// changes for readers until each draft is published; completions of the step
+// don't carry over (it becomes a new step in the other document).
+export async function handleMoveStep(ctx) {
+  const { document: source } = await requireEditor(ctx, ctx.params.id);
+  const body = await readJson(ctx.request);
+  const targetId = Number(body.target_document_id);
+  if (!targetId || targetId === source.id) throw badRequest("Choose another document.");
+  let target;
+  try {
+    target = (await requireEditor(ctx, targetId)).document;
+  } catch (error) {
+    if (error.status === 403 || error.status === 404) throw forbidden("You can't edit that document.");
+    throw error;
+  }
+  const [sourceDraft, targetDraft] = await Promise.all([
+    ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", source.id),
+    ctx.db.first("SELECT * FROM drafts WHERE document_id = ?", target.id),
+  ]);
+  if (sourceDraft && sourceDraft.status === "submitted") throw forbidden("This draft is waiting for review and can't be changed.");
+  if (targetDraft && targetDraft.status === "submitted") throw badRequest(`"${target.title}" has changes waiting for review. Try again once they are reviewed.`);
+  if ((sourceDraft ? sourceDraft.updated_at : null) !== (body.base_updated_at ?? null)) {
+    throw new HttpError(409, "Someone else saved this draft in the meantime. The latest version has been loaded.", { code: "draft_conflict" });
+  }
+  const sourceSnapshot = sourceDraft ? JSON.parse(sourceDraft.snapshot_json) : await publishedSnapshot(ctx.db, source);
+  const targetSnapshot = targetDraft ? JSON.parse(targetDraft.snapshot_json) : await publishedSnapshot(ctx.db, target);
+  const index = sourceSnapshot.steps.findIndex((st) => st.key === body.step_key);
+  if (index < 0) throw notFound("This step isn't in the draft any more.");
+  if (sourceSnapshot.steps.length === 1) throw badRequest("A document needs at least one step, so its only step can't be moved.");
+  if (targetSnapshot.steps.length >= MAX_STEPS) throw badRequest(`"${target.title}" already has ${MAX_STEPS} steps.`);
+  const [step] = sourceSnapshot.steps.splice(index, 1);
+  targetSnapshot.steps.push({ id: null, key: `m${Date.now().toString(36)}`, title: step.title, content_json: step.content_json });
+
+  const now = nowIso();
+  const write = (document, draft, snapshot) =>
+    draft
+      ? ["UPDATE drafts SET snapshot_json = ?, status = 'editing', updated_at = ? WHERE id = ?", [JSON.stringify(snapshot), now, draft.id]]
+      : ["INSERT INTO drafts (document_id, snapshot_json, status, author_id, created_at, updated_at) VALUES (?, ?, 'editing', ?, ?, ?)", [document.id, JSON.stringify(snapshot), ctx.user.id, now, now]];
+  await ctx.db.batch([write(source, sourceDraft, sourceSnapshot), write(target, targetDraft, targetSnapshot)]);
+  return json({ updated_at: now, snapshot: sourceSnapshot, target: { id: target.id, title: target.title } });
+}
+
 // DELETE /api/documents/:id/draft
 export async function handleDiscardDraft(ctx) {
   const { document, level } = await requireEditor(ctx, ctx.params.id);

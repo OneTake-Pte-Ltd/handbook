@@ -7,6 +7,7 @@ import { isAdmin, isLeader, session, workspaceLogo } from "./state.js";
 import { renderLogin } from "./views/login.js";
 import { renderForcedPasswordChange } from "./views/password.js";
 import { createSidebar } from "./sidebar.js";
+import { applyStoredWidths, resizeHandle } from "./lib/resizer.js";
 import { attachSearchBox } from "./search-box.js";
 import { createBell } from "./notifications.js";
 
@@ -124,7 +125,7 @@ function buildShell() {
   }, { signal: listeners.signal });
   window.addEventListener("handbook:active-document", (event) => tree.setActive(event.detail), { signal: listeners.signal });
   const backdrop = h("div", { class: "backdrop", onclick: () => setDrawer(false) });
-  const body = h("div", { class: "shell" }, sidebar, backdrop, main);
+  const body = h("div", { class: "shell" }, sidebar, resizeHandle("sidebar", () => sidebar.getBoundingClientRect().width), backdrop, main);
 
   function setDrawer(open) {
     body.dataset.drawer = open ? "open" : "closed";
@@ -289,6 +290,7 @@ window.addEventListener("handbook:logged-out", (event) => showLogin({ message: e
 window.addEventListener("handbook:must-change-password", () => startSession().catch(handleBootError));
 
 function boot() {
+  applyStoredWidths();
   // ?workspace=https://... pre-fills the workspace URL (invitation links).
   const params = new URLSearchParams(location.search);
   let invited = null;
