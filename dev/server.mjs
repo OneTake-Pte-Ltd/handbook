@@ -67,7 +67,16 @@ createServer(async (req, res) => {
   });
   const response = await app.handle(request);
   res.writeHead(response.status, Object.fromEntries(response.headers));
-  res.end(Buffer.from(await response.arrayBuffer()));
+  if (!response.body) return res.end();
+  // Streamed as it comes, like Bunny does (the AI features send events).
+  const reader = response.body.getReader();
+  req.on("close", () => reader.cancel().catch(() => {}));
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    res.write(value);
+  }
+  res.end();
 }).listen(API_PORT, () => console.log(`API       http://localhost:${API_PORT}`));
 
 const TYPES = {

@@ -31,6 +31,7 @@ import {
   requireAdmin,
 } from "./lib/people.js";
 import { handleImportImage, handleUpload } from "./lib/storage.js";
+import { handleAiModels, handleAsk, handleWrite } from "./lib/ai-handlers.js";
 import {
   handleCompleteStep,
   handleCreateCategory,
@@ -102,6 +103,9 @@ const ROUTES = [
   ["DELETE", "/api/departments/:id/members/:userId", handleRemoveMember],
   ["POST", "/api/files", handleUpload],
   ["POST", "/api/files/import-url", handleImportImage],
+  ["POST", "/api/ai/models", handleAiModels],
+  ["POST", "/api/ai/write", handleWrite],
+  ["POST", "/api/ai/ask", handleAsk],
   ["GET", "/api/embed-preview", handleEmbedPreview],
   ["GET", "/api/search", handleSearch],
   ["POST", "/api/search/rebuild", handleRebuildSearch],

@@ -10,6 +10,7 @@ import { createSidebar } from "./sidebar.js";
 import { applyStoredWidths, resizeHandle } from "./lib/resizer.js";
 import { attachSearchBox } from "./search-box.js";
 import { createBell } from "./notifications.js";
+import { openAssistant } from "./assistant.js";
 
 const root = document.getElementById("app");
 
@@ -84,6 +85,9 @@ function buildShell() {
   const searchForm = h("form", { class: "topbar__search search-field", role: "search" }, icon("search"), searchInput);
   attachSearchBox(searchForm, searchInput);
   const bell = createBell();
+  // The assistant shows once an admin has set up the AI endpoint.
+  const askButton = h("button", { class: "icon-button", type: "button", "aria-label": "Ask the handbook", title: "Ask the handbook", hidden: !me.workspace.ai_enabled }, icon("sparkle"));
+  askButton.addEventListener("click", () => openAssistant());
   const logoImg = h("img", { src: workspaceLogo(me.workspace), alt: "" });
   const logoName = h("span", { class: "topbar__logo-name" }, me.workspace.name);
 
@@ -98,6 +102,7 @@ function buildShell() {
       "div",
       { class: "topbar__actions" },
       h("a", { class: "icon-button topbar__search-button", href: "#/search", "aria-label": "Search" }, icon("search")),
+      askButton,
       bell.el,
       h("div", { class: "menu-wrap" }, avatarButton, avatarMenu),
     ),
@@ -124,6 +129,8 @@ function buildShell() {
     route();
   }, { signal: listeners.signal });
   window.addEventListener("handbook:active-document", (event) => tree.setActive(event.detail), { signal: listeners.signal });
+  window.addEventListener("handbook:ai-changed", () => (askButton.hidden = !session.me.workspace.ai_enabled), { signal: listeners.signal });
+  window.addEventListener("handbook:open-assistant", (event) => openAssistant(event.detail || ""), { signal: listeners.signal });
   const backdrop = h("div", { class: "backdrop", onclick: () => setDrawer(false) });
   const body = h("div", { class: "shell" }, sidebar, resizeHandle("sidebar", () => sidebar.getBoundingClientRect().width), backdrop, main);
 

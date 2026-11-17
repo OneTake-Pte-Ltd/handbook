@@ -24,7 +24,7 @@ import {
   timingSafeEqual,
   verifyPassword,
 } from "./crypto.js";
-import { getSettings, setSettings, settingsFromRows } from "./settings.js";
+import { getSettings, setSettings, aiEnabled, settingsFromRows } from "./settings.js";
 import { LATEST_VERSION } from "./migrations.js";
 import { ACCESS_QUERIES, accessDataFromRows, accessFor } from "./permissions.js";
 
@@ -328,7 +328,7 @@ export async function handleMe(ctx) {
       name: settings.workspace_name,
       logo_url: settings.logo_url,
       banner_url: settings.banner_url,
-      ai_enabled: Boolean(settings.anthropic_api_key),
+      ai_enabled: aiEnabled(settings),
       // Images outside this address are copied into storage when pasted.
       files_url: (ctx.env.PUBLIC_FILES_URL || "").replace(/\/+$/, ""),
     },

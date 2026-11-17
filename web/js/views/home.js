@@ -54,7 +54,7 @@ function documentCard(d) {
     { class: "doc-card", href: `#/doc/${d.id}` },
     h("span", { class: "doc-card__category" }, `${d.category.emoji ? `${d.category.emoji} ` : ""}${d.category.name}`),
     h("strong", { class: "doc-card__title" }, d.title),
-    h("span", { class: "doc-card__description" }, d.description || "This document has no description."),
+    d.description ? h("span", { class: "doc-card__description" }, d.description) : null,
     h(
       "span",
       { class: "doc-card__footer" },
@@ -107,14 +107,17 @@ export async function render(main) {
         "div",
         { class: "banner__search" },
         searchForm,
-        // The assistant arrives in milestone 8; the button only shows once an Anthropic key is set.
-        me.workspace.ai_enabled ? h("a", { class: "button", href: "#/assistant" }, icon("sparkle"), "Ask a question") : null,
+        // The assistant only shows once an admin has set up the AI endpoint.
+        me.workspace.ai_enabled ? h("button", { class: "button", type: "button", onclick: () => window.dispatchEvent(new CustomEvent("handbook:open-assistant")) }, icon("sparkle"), "Ask a question") : null,
       ),
     ),
   );
   if (me.workspace.banner_url) banner.style.backgroundImage = `url(${JSON.stringify(me.workspace.banner_url)})`;
   const grid = h("div", { class: "home-grid" });
-  main.append(banner, h("div", { class: "page" }, grid));
+  const aiPrompt = !me.workspace.ai_enabled && me.user.is_admin
+    ? h("div", { class: "alert alert--info", style: "margin-bottom:16px" }, h("span", {}, "Turn on the assistant and the AI writer: add an API key and choose the models in ", h("a", { href: "#/settings" }, "Settings"), "."))
+    : null;
+  main.append(banner, h("div", { class: "page" }, aiPrompt, grid));
 
   const data = await api("GET", "/home");
 
